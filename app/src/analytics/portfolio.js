@@ -205,8 +205,10 @@ export function expectedMovement(analysis, value = 10000) {
 
   // A normal day: roughly ±1 standard deviation of daily moves.
   const typicalDayPct = d;
-  // A rough day: ~1.65 sd, which is exceeded about one day in twenty.
-  const roughDayPct = d * 1.65;
+  // A rough day: ±1.96 sd. Exceeded in EITHER direction about one day in
+  // twenty — the two-sided probability is what the app's wording claims, and
+  // at 1.65 sd it would actually be one day in ten.
+  const roughDayPct = d * 1.96;
   const monthPct = d * Math.sqrt(21);
   const yearPct = analysis.annualVol;
 
@@ -221,9 +223,10 @@ export function expectedMovement(analysis, value = 10000) {
     monthValue: monthPct * value,
     yearPct,
     yearValue: yearPct * value,
-    // Worst 1-in-20 day, expressed as a loss.
-    drawdownDayPct: -roughDayPct,
-    drawdownDayValue: -roughDayPct * value,
+    // Worst 1-in-20 day expressed as a loss. One-sided, so 1.65 sd is right
+    // here even though the two-sided "rough day" above needs 1.96.
+    drawdownDayPct: -(d * 1.65),
+    drawdownDayValue: -(d * 1.65) * value,
     value,
   };
 }

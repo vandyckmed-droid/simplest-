@@ -23,7 +23,7 @@ import {
   manifest,
   benchmark,
 } from '../data';
-import { rebase } from '../analytics/returns';
+import { rebaseTogether } from '../analytics/returns';
 import { explainMeasure } from '../analytics/momentum';
 import { isNum } from '../analytics/stats';
 import {
@@ -81,13 +81,17 @@ export default function Ticker({ nav, params }) {
 
     const other = seriesFor(compareRef);
     const otherSlice = other ? other.values.slice(-n) : [];
+    // Shared rebase point: both lines start at 100 on the same date, even if
+    // one of them listed partway through the window.
+    const { series: rebased, startIndex } = rebaseTogether([slice, otherSlice]);
     return {
       dates: sliceDates,
       series: [
-        { label: row.symbol, values: rebase(slice), color: t.accent, width: 2.2 },
-        { label: other ? other.label : '—', values: rebase(otherSlice), color: t.textMuted, width: 1.8 },
+        { label: row.symbol, values: rebased[0], color: t.accent, width: 2.2 },
+        { label: other ? other.label : '—', values: rebased[1], color: t.textMuted, width: 1.8 },
       ],
       normalised: true,
+      startIndex,
     };
   }, [closes, range, compareRef, t, row]);
 
@@ -211,8 +215,11 @@ export default function Ticker({ nav, params }) {
               </ScrollView>
               {chart && chart.normalised ? (
                 <Text style={{ color: t.textFaint, fontSize: t.font.micro, marginTop: 10, lineHeight: 16 }}>
-                  Both lines start at 100 on {shortDate(chart.dates[0])}, so the gap between them is the
-                  difference in performance over the period.
+                  {chart.startIndex >= 0
+                    ? `Both lines start at 100 on ${shortDate(chart.dates[chart.startIndex])}${
+                        chart.startIndex > 0 ? ' — the first day both traded' : ''
+                      }, so the gap between them is the difference in performance over the period.`
+                    : 'These two series have no overlapping history in this window.'}
                 </Text>
               ) : null}
             </View>

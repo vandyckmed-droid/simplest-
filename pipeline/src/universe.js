@@ -135,7 +135,10 @@ export function dedupe(rows, profiles) {
   for (const r of rows) {
     const p = profiles.get(r.symbol);
     const cik = p && p.cik ? `cik:${p.cik}` : null;
-    const key = cik || `name:${normaliseName(p ? p.name : r.name)}` || `sym:${r.symbol}`;
+    // Guard the name key: an empty normalised name would make 'name:' a shared
+    // truthy key, silently merging unrelated companies as "duplicates".
+    const norm = normaliseName(p ? p.name : r.name);
+    const key = cik || (norm ? `name:${norm}` : `sym:${r.symbol}`);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }

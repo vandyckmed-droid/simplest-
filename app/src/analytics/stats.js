@@ -44,8 +44,8 @@ export function zScore(x, peers) {
   return (x - m) / sd;
 }
 
-// Dense competition ranking, 1 = best. Higher value ranks better when
-// descending = true. Ties share the lowest rank number.
+// Standard competition ranking, 1 = best: ties share the lowest rank number
+// and the ranks after a tie are skipped (values 9, 9, 5 rank 1, 1, 3).
 export function rankDescending(items, valueOf) {
   const scored = items
     .map((item, i) => ({ item, i, v: valueOf(item) }))

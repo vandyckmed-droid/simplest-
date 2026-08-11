@@ -30,6 +30,8 @@ export default function Settings({ nav }) {
             app.clearHidden();
             app.resetFilters();
             app.resetWeights();
+            app.clearRecent();
+            app.setPortfolioValue(10000);
           },
         },
       ]

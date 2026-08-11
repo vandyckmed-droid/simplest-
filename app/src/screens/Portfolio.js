@@ -237,8 +237,9 @@ export default function Portfolio({ nav }) {
                   </View>
                   {red ? (
                     <Text style={{ color: t.warn, fontSize: t.font.micro, marginTop: 6 }}>
-                      Moves with the rest of the basket {(red.avgCorrelation * 100).toFixed(0)}% of the time —
-                      adds little that your other holdings do not already give you.
+                      Tracks the rest of the basket very closely (correlation{' '}
+                      {red.avgCorrelation.toFixed(2)}) — adds little that your other holdings do not
+                      already give you.
                     </Text>
                   ) : null}
                 </View>
@@ -305,7 +306,7 @@ export default function Portfolio({ nav }) {
                       {i > 0 ? <Divider /> : null}
                       <StatRow
                         label={r.symbol}
-                        value={`${(r.avgCorrelation * 100).toFixed(0)}%`}
+                        value={`corr ${r.avgCorrelation.toFixed(2)}`}
                         tone={t.warn}
                         hint={`${(r.weight * 100).toFixed(0)}% of the basket`}
                         onPress={() => nav.push('ticker', { symbol: r.symbol })}

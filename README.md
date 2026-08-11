@@ -106,7 +106,8 @@ latest month tends to mean-revert and would otherwise fight the signal.
 
 Each measure gets a **global rank**, a **sector-relative rank**, and a
 **sector-relative z-score**. Industries with at least 5 universe members also get
-their own rank and z-score. Ranking is dense competition ranking, 1 = best.
+their own rank and z-score. Ranking is standard competition ranking, 1 = best:
+ties share a rank and the following numbers are skipped.
 
 Sector and industry series are **equal weight, rebalanced daily**, rebased to 100,
 and then scored with exactly the same framework, so a sector rank means the same
@@ -116,8 +117,8 @@ thing as a stock rank.
 
 Basket volatility uses the full covariance matrix of daily returns over the last
 252 overlapping sessions. Results are expressed as a normal day (1 standard
-deviation), a rough day (1.65 standard deviations, about one session in twenty),
-and a month — each in both percent and money.
+deviation), a rough day (1.96 standard deviations — exceeded in either direction
+about one session in twenty), and a month — each in both percent and money.
 
 Diversification is reported as **effective independent positions**: the
 volatility of the basket compared against the weighted average volatility of its

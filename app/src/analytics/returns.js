@@ -93,6 +93,31 @@ export function rebase(values, base = 100) {
   return values.map((v) => (isNum(v) && v > 0 ? (v / first) * base : null));
 }
 
+// Rebase several series from their first COMMON valid index, for multi-line
+// comparison charts. Rebasing each line at its own first bar would let a
+// recently listed name appear at 100 mid-chart and make its return over a
+// shorter window look comparable to the others'. Everything before the common
+// start is nulled, so the chart and any return computed from the result cover
+// one identical window. Returns { series, startIndex } (startIndex −1 when the
+// series never overlap).
+export function rebaseTogether(seriesList, base = 100) {
+  const n = seriesList.length ? Math.max(...seriesList.map((s) => s.length)) : 0;
+  let start = -1;
+  for (let i = 0; i < n; i += 1) {
+    if (seriesList.every((s) => isNum(s[i]) && s[i] > 0)) {
+      start = i;
+      break;
+    }
+  }
+  if (start === -1) return { series: seriesList.map((s) => s.map(() => null)), startIndex: -1 };
+  return {
+    series: seriesList.map((s) =>
+      s.map((v, i) => (i >= start && isNum(v) && v > 0 ? (v / s[start]) * base : null))
+    ),
+    startIndex: start,
+  };
+}
+
 export function maxDrawdown(closes) {
   let peak = -Infinity;
   let worst = 0;

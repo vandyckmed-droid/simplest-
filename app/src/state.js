@@ -137,8 +137,19 @@ export function AppStateProvider({ children }) {
         saveSetting('recent', next);
       },
 
+      // Settings' "clear saved data" must reset the in-memory copies too;
+      // otherwise the next noteVisit() writes the old history straight back.
+      clearRecent: () => {
+        setRecent([]);
+        saveSetting('recent', []);
+      },
+
       // Holdings with weights resolved: anything the user has not explicitly
-      // weighted shares the remainder equally.
+      // weighted gets an equal 1/n share, and the whole set is normalised
+      // downstream. (Deliberately NOT "the remainder": if explicit weights
+      // already sum to 100, a newly added name would get 0% and look broken.
+      // The Portfolio screen pins every weight on first edit, so this default
+      // only applies to names never touched there.)
       holdings: () => {
         if (selected.length === 0) return [];
         const explicit = selected.filter((s) => typeof weights[s] === 'number' && weights[s] >= 0);

@@ -43,32 +43,38 @@ export default function Rankings({ nav }) {
     const dir = f.sortDir === 'asc' ? 1 : -1;
     const measure = f.measure;
 
-    const value = (r) => {
+    // Raw metric, null when the security cannot be measured on it. For 'rank'
+    // a LOWER value is better; for everything else numeric, higher is better.
+    const metric = (r) => {
       switch (f.sortKey) {
         case 'rank': {
           const rk = r.ranks[measure];
-          const v = f.scope === 'sector' ? rk.group : rk.global;
-          return v === null ? Infinity : v;
+          return f.scope === 'sector' ? rk.group : rk.global;
         }
-        case 'z': {
-          const z = r.ranks[measure].groupZ;
-          return z === null ? -Infinity : -z; // higher z first when ascending
-        }
+        case 'z':
+          return r.ranks[measure].groupZ;
         case 'symbol':
           return r.symbol;
         default: {
           const v = r[f.sortKey];
-          return typeof v === 'number' ? -v : -Infinity; // bigger first when ascending
+          return typeof v === 'number' ? v : null;
         }
       }
     };
+    const lowerIsBetter = f.sortKey === 'rank';
 
     return list.slice().sort((a, b) => {
-      const va = value(a);
-      const vb = value(b);
+      const va = metric(a);
+      const vb = metric(b);
       if (typeof va === 'string') return va.localeCompare(vb) * dir;
+      // Unmeasurable rows go last regardless of direction: an unranked name is
+      // neither the "best" nor the "worst" of anything.
+      if (va === null && vb === null) return a.symbol.localeCompare(b.symbol);
+      if (va === null) return 1;
+      if (vb === null) return -1;
       if (va === vb) return a.symbol.localeCompare(b.symbol);
-      return (va - vb) * dir;
+      const bestFirst = lowerIsBetter ? va - vb : vb - va;
+      return bestFirst * dir;
     });
   }, [f, app.hidden, app.selected]);
 

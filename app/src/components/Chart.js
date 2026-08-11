@@ -172,13 +172,25 @@ export default function Chart({
           )}
 
           {series.map((s, si) => {
-            const segs = buildSegments(s.values || [], xOf, yOf);
+            const vals = s.values || [];
+            const segs = buildSegments(vals, xOf, yOf);
             const only = series.length === 1;
+            // Close the fill under the data's own extent, not the full axis —
+            // a series that starts mid-chart must not paint a wedge over the
+            // region where it has no observations.
+            const firstValid = vals.findIndex(isNum);
+            let lastValid = -1;
+            for (let i = vals.length - 1; i >= 0; i -= 1) {
+              if (isNum(vals[i])) {
+                lastValid = i;
+                break;
+              }
+            }
             return (
               <G key={`s${si}`}>
-                {fill && only && segs.length === 1 && (
+                {fill && only && segs.length === 1 && firstValid >= 0 && (
                   <Path
-                    d={`${segs[0]}L${xOf(n - 1).toFixed(2)} ${(PAD_T + innerH).toFixed(2)}L${xOf(0).toFixed(2)} ${(PAD_T + innerH).toFixed(2)}Z`}
+                    d={`${segs[0]}L${xOf(lastValid).toFixed(2)} ${(PAD_T + innerH).toFixed(2)}L${xOf(firstValid).toFixed(2)} ${(PAD_T + innerH).toFixed(2)}Z`}
                     fill={`url(#grad${si})`}
                   />
                 )}

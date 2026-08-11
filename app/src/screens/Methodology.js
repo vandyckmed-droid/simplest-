@@ -6,7 +6,7 @@ import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Header from '../components/Header';
 import { Card, SectionTitle, Divider, StatRow, Pill } from '../components/ui';
 import { useTheme } from '../theme';
-import { manifest, universe, sectorSeries, industrySeries, benchmark, macro } from '../data';
+import { manifest, universe, sectorSeries, industrySeries, benchmark, macro, dates } from '../data';
 import { compactMoney, mediumDate, relativeTime } from '../format';
 import { explainMeasure } from '../analytics/momentum';
 
@@ -44,9 +44,17 @@ export default function Methodology({ nav }) {
           <Divider />
           <StatRow label="Dataset built" value={relativeTime(manifest.builtAt)} mono={false} />
           <Divider />
-          <StatRow label="History held" value={`${manifest.calendar.days} trading days`} />
+          <StatRow
+            label="History in this app"
+            value={`${dates.length} trading days`}
+            hint={`Charts span ${mediumDate(dates[0])} to ${mediumDate(manifest.tradingDate)}`}
+          />
           <Divider />
-          <StatRow label="Earliest bar" value={mediumDate(manifest.calendar.first)} mono={false} />
+          <StatRow
+            label="Full dataset"
+            value={`${manifest.calendar.days} trading days`}
+            hint={`Back to ${mediumDate(manifest.calendar.first)}. The scores were computed over this full history; the app carries the recent slice its charts can show.`}
+          />
           <Para muted>
             The trading date is the last session with a complete close for the market as a whole. If today is
             still open, the rankings deliberately show yesterday rather than a half-formed bar.
@@ -140,7 +148,7 @@ export default function Methodology({ nav }) {
         <Card style={styles.card}>
           <Para>Every measure is ranked twice: against the whole universe, and against the security&apos;s own sector.</Para>
           <Divider />
-          <StatRow label="Ranking method" value="dense, 1 = best" mono={false} hint={m.ranking} />
+          <StatRow label="Ranking method" value="ties share a rank, 1 = best" mono={false} hint={m.ranking} />
           <Divider />
           <StatRow label="Sector peer groups" value={`${manifest.counts.sectors} sectors`} />
           <Divider />
@@ -197,9 +205,9 @@ export default function Methodology({ nav }) {
           <Divider />
           <StatRow
             label="Rough day"
-            value="1.65 standard deviations"
+            value="1.96 standard deviations"
             mono={false}
-            hint="Exceeded about one session in twenty"
+            hint="Exceeded, in one direction or the other, about one session in twenty"
           />
           <Para muted>
             Correlations use the same overlapping window. Only dates where every holding traded are used, so

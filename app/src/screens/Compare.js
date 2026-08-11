@@ -9,7 +9,7 @@ import { Card, SectionTitle, Segmented, Divider, EmptyState, Button, Inputs } fr
 import { useTheme, toneFor } from '../theme';
 import { useAppState } from '../state';
 import { bySymbol, closesFor, dates, seriesFor, benchmark } from '../data';
-import { rebase } from '../analytics/returns';
+import { rebaseTogether } from '../analytics/returns';
 import { isNum } from '../analytics/stats';
 import { num, pctSigned, shortDate } from '../format';
 
@@ -40,32 +40,29 @@ export default function Compare({ nav, params }) {
 
   const sliceDates = dates.slice(-range);
 
-  const series = useMemo(() => {
-    const out = symbols
+  const { series, commonStart } = useMemo(() => {
+    const lines = symbols
       .map((sym, i) => {
         const closes = closesFor(sym);
         if (!closes) return null;
-        return {
-          label: sym,
-          values: rebase(closes.slice(-range)),
-          color: palette[i % palette.length],
-          width: 2,
-        };
+        return { label: sym, raw: closes.slice(-range), color: palette[i % palette.length], width: 2 };
       })
       .filter(Boolean);
 
     if (withBenchmark) {
       const b = seriesFor({ kind: 'benchmark' });
       if (b) {
-        out.push({
-          label: benchmark.symbol,
-          values: rebase(b.values.slice(-range)),
-          color: t.textMuted,
-          width: 1.6,
-        });
+        lines.push({ label: benchmark.symbol, raw: b.values.slice(-range), color: t.textMuted, width: 1.6 });
       }
     }
-    return out;
+
+    // One shared rebase point, so a recently listed name is measured over the
+    // same window as everything else instead of its own shorter one.
+    const { series: rebased, startIndex } = rebaseTogether(lines.map((l) => l.raw));
+    return {
+      series: lines.map((l, i) => ({ label: l.label, values: rebased[i], color: l.color, width: l.width })),
+      commonStart: startIndex,
+    };
   }, [symbols, range, withBenchmark, t]);
 
   const table = useMemo(
@@ -112,7 +109,11 @@ export default function Compare({ nav, params }) {
                 NORMALISED PERFORMANCE
               </Text>
               <Text style={{ color: t.textFaint, fontSize: t.font.micro, marginTop: 3 }}>
-                All lines start at 100 on {shortDate(sliceDates[0])}
+                {commonStart >= 0
+                  ? `All lines start at 100 on ${shortDate(sliceDates[commonStart])}${
+                      commonStart > 0 ? ' — the first day every line traded' : ''
+                    }`
+                  : 'These securities have no overlapping history in this window'}
               </Text>
             </View>
             <View style={{ paddingHorizontal: 10 }}>
@@ -199,7 +200,7 @@ export default function Compare({ nav, params }) {
         <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
           <Inputs
             items={[
-              { label: 'Window', value: `${sliceDates.length} trading days` },
+              { label: 'Window', value: `${commonStart >= 0 ? sliceDates.length - commonStart : 0} trading days` },
               { label: 'Basis', value: 'adjusted closes' },
               { label: 'Max lines', value: String(MAX_LINES) },
             ]}

@@ -343,7 +343,7 @@ async function main() {
       returnAnnualisation: 'Geometric: (1 + total return) ^ (252 / window days) − 1',
       atr: "Wilder's 14-period ATR on adjusted OHLC",
       sectorIndices: 'Equal weight, rebalanced daily, rebased to 100 at the start of the calendar',
-      ranking: 'Dense competition ranking, 1 = best. Sector-relative z-scores use that sector as the peer group.',
+      ranking: 'Standard competition ranking, 1 = best: ties share a rank and the following rank numbers are skipped. Sector-relative z-scores use that sector as the peer group.',
     },
     dataQuality: {
       duplicatesDropped: dropped,

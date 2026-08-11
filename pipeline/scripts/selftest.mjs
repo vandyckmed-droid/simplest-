@@ -2,7 +2,7 @@
 // Run: node pipeline/scripts/selftest.mjs
 
 import { mean, stdev, zScore, rankDescending, pearson } from '../../app/src/analytics/stats.js';
-import { annualiseReturn, annualiseVolatility, totalReturn, riskAdjustedMomentum, rebase, maxDrawdown } from '../../app/src/analytics/returns.js';
+import { annualiseReturn, annualiseVolatility, totalReturn, riskAdjustedMomentum, rebase, rebaseTogether, maxDrawdown } from '../../app/src/analytics/returns.js';
 import { computeMomentum, rankUniverse, scoresFrom } from '../../app/src/analytics/momentum.js';
 import { atr, trueRange, atrPercent } from '../../app/src/analytics/atr.js';
 import { equalWeightSeries, groupsAtLeast } from '../../app/src/analytics/sectors.js';
@@ -50,6 +50,18 @@ check('smooth ramp -> huge ratio', ram.ratio > 1000, `got ${ram.ratio}`);
 check('short series -> null', riskAdjustedMomentum(ramp.slice(-50), 252, 21) === null);
 check('rebase starts at 100', near(rebase([50, 75, 100])[0], 100));
 check('rebase doubles to 200', near(rebase([50, 100])[1], 200));
+
+// A short-history line must be rebased at the first COMMON date, not its own
+// first date, and everything before that date must be nulled for every line.
+const rt = rebaseTogether([
+  [null, null, 100, 110],
+  [50, 52, 55, 60.5],
+]);
+check('rebaseTogether finds the common start', rt.startIndex === 2);
+check('rebaseTogether nulls before common start', rt.series[1][0] === null && rt.series[1][1] === null);
+check('rebaseTogether rebases both at the common start', near(rt.series[0][2], 100) && near(rt.series[1][2], 100));
+check('rebaseTogether preserves relative moves', near(rt.series[0][3], 110) && near(rt.series[1][3], 110, 1e-9));
+check('rebaseTogether reports no overlap', rebaseTogether([[1, null], [null, 1]]).startIndex === -1);
 check('maxDrawdown', near(maxDrawdown([100, 120, 60, 90]), 60 / 120 - 1, 1e-12));
 
 console.log('\nmomentum framework');
@@ -126,7 +138,8 @@ check('marginal removal reported', mixed.marginal.length === 2 && mixed.marginal
 
 const mv = expectedMovement(mixed, 10000);
 check('movement scales with value', near(mv.typicalDayValue, mv.typicalDayPct * 10000, 1e-9));
-check('rough day exceeds typical day', mv.roughDayPct > mv.typicalDayPct);
+check('rough day is the two-sided 1-in-20 (1.96 sd)', near(mv.roughDayPct, mv.typicalDayPct * 1.96, 1e-12));
+check('drawdown day is the one-sided 1-in-20 (1.65 sd)', near(mv.drawdownDayPct, -mv.typicalDayPct * 1.65, 1e-12));
 check('month wider than day', mv.monthPct > mv.typicalDayPct);
 const desc = describeRisk(mixed, mv);
 check('plain language produced', desc.sentences.length >= 4 && typeof desc.band.label === 'string');
