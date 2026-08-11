@@ -37,6 +37,7 @@ const compact = {
     symbol: s.symbol,
     name: tidyName(s.name),
     group: s.group,
+    sector: s.sector,
     score12_1: round(s.score12_1, 2),
     score6_1: round(s.score6_1, 2),
     composite: round(s.composite, 2),

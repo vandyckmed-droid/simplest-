@@ -52,8 +52,9 @@ scores.
 - A summary strip per filter: median score, best name, share positive, count,
   and a distribution histogram.
 - Each row: rank, ticker, the ranked score with a zero-anchored diverging bar
-  (direction encodes sign, not colour alone), and a micro-line carrying the
-  name plus both horizon scores inline — there is no drawer.
+  (direction encodes sign, not colour alone), and a micro-line with a
+  colour-coded sector chip (TECH, HLTH, FIN, …) and the company name — there
+  is no drawer.
 - **Watchlist**: tapping a row adds or removes it; selection persists in
   localStorage. A fixed bottom bar shows the count, the default equal weight
   per name (1/n), and the equal-weighted average blend; `WL` filters the list

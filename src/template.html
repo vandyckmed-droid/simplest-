@@ -291,15 +291,35 @@
 
   .meta {
     grid-area: 2 / 2 / 3 / 4;
-    font-size: 10.5px;
-    font-variant-numeric: tabular-nums;
-    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--ink-2);
+  }
+
+  .meta b {
+    font-weight: 400;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .meta b { font-weight: 400; color: var(--ink-2); }
+  /* sector chip: abbreviation + hue; the text is the identity, the colour a
+     scanning aid */
+  .sec {
+    flex: 0 0 auto;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: 999px;
+    color: var(--sec, var(--muted));
+    background: color-mix(in srgb, var(--sec, var(--muted)) 14%, transparent);
+  }
 
   .val {
     grid-area: 1 / 3 / 2 / 4;
@@ -515,6 +535,23 @@
   const fmtScore = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
   const sign = (v) => (v >= 0 ? "pos" : "neg");
 
+  // 11 sectors, abbreviated, each with its own hue. The abbreviation carries
+  // the identity; the hue is a scanning aid, and none of them reuse the
+  // green/red reserved for sign.
+  const SECTORS = {
+    "Technology": ["TECH", "#4da3ff"],
+    "Communication Services": ["COMM", "#9d7bff"],
+    "Healthcare": ["HLTH", "#2dd4bf"],
+    "Financial Services": ["FIN", "#f2c14e"],
+    "Energy": ["ENRG", "#ff9f43"],
+    "Consumer Cyclical": ["CYCL", "#ff6ea1"],
+    "Consumer Defensive": ["DFNS", "#c9a97c"],
+    "Industrials": ["INDL", "#93a7bd"],
+    "Basic Materials": ["MATL", "#b3c46e"],
+    "Real Estate": ["RE", "#e07be0"],
+    "Utilities": ["UTIL", "#7fd0d9"],
+  };
+
   const state = { group: "__all", sort: "composite", desc: true, query: "", view: "all" };
 
   /* ---------- watchlist: tap rows to add/remove; equal weight ---------- */
@@ -651,13 +688,16 @@
     tkr.className = "tkr";
     tkr.textContent = s.symbol;
 
-    // One truncating micro-line: name, then both horizons — the drawer's job,
-    // done inline.
     const meta = document.createElement("span");
     meta.className = "meta";
+    const [abbr, hue] = SECTORS[s.sector] ?? ["—", null];
+    const sec = document.createElement("span");
+    sec.className = "sec";
+    sec.textContent = abbr;
+    if (hue) sec.style.setProperty("--sec", hue);
     const nm = document.createElement("b");
     nm.textContent = s.name;
-    meta.append(nm, ` · 12-1 ${fmtScore(s.score12_1)} · 6-1 ${fmtScore(s.score6_1)}`);
+    meta.append(sec, nm);
 
     const val = document.createElement("span");
     val.className = "val";
