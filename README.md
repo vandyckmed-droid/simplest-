@@ -69,7 +69,7 @@ or more US companies above $3B in market cap — far too granular to fill
 25-name buckets. `src/industry-groups.js` folds those industries into 22
 GICS-style **industry groups**, which is coarse enough to rank within and much
 finer than the 11-sector level. Each stock still carries its original FMP
-industry, shown in the detail drawer.
+industry in data/screener.json, though the page itself no longer displays it.
 
 Per group, selection runs:
 
