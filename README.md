@@ -43,6 +43,32 @@ their different lengths, and across names with very different volatility. The
 **blend** that drives the default ranking is the plain average of the two
 scores.
 
+The detail drawer leads with `annReturn`, since an 11-month and a 5-month
+window are not otherwise comparable — Dell's 12-1 and 6-1 raw returns are
++114% and +127%, which reads as "about the same" until you annualise them to
++125% and +304%. The raw window return still follows it, because that is what
+the stock actually did.
+
+## The rolling charts
+
+Each drawer also carries two bar charts running the same arithmetic over a
+trailing 63-session window that slides forward to the last close, **with no
+skip**:
+
+- annualised log return of the window
+- that return divided by the window's own annualised volatility
+
+Samples are weekly and stored oldest-first, so index `i` sits
+`(count - 1 - i) * 5` sessions back from the last close — no per-stock date
+array is needed to place anything on the axis. A dashed rule marks 21 sessions
+back: everything to its right is the month the 12-1 and 6-1 scores deliberately
+exclude, which is the part of the tape those two numbers cannot show.
+
+Zero always sits on the axis, but only sits mid-plot when the series actually
+crosses it, so a name that never turned negative uses the full height. Each
+chart is scaled to its own extreme — read shape and sign, not height across
+names.
+
 ## The universe
 
 FMP's own industry taxonomy has ~130 entries, and only five of them contain 25
@@ -70,7 +96,7 @@ large caps; the rest hit 25.
 ```
 src/industry-groups.js   FMP industry -> industry group, plus chip abbreviations
 src/fmp.js               /stable client: retries, bounded concurrency
-src/momentum.js          the windowing and scoring math
+src/momentum.js          the windowing, scoring, and rolling-series math
 src/build.js             universe -> prices -> scores -> data/screener.json
 src/template.html        the page; __DATA__ is the injection point
 src/render.js            inlines the JSON, writes dist/index.html

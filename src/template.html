@@ -440,6 +440,76 @@
     margin-top: -4px;
   }
 
+  /* ---------- rolling 3-month charts ---------- */
+  .roll { margin-top: 14px; }
+
+  .roll-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 5px;
+  }
+
+  .roll-plot { position: relative; height: 54px; }
+
+  .roll-cols {
+    display: flex;
+    align-items: stretch;
+    gap: 1px;
+    height: 100%;
+  }
+
+  .roll-cols i { flex: 1; position: relative; display: block; }
+
+  .roll-cols u {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: block;
+    min-height: 1px;
+    border-radius: 1px;
+  }
+
+  .roll-cols u[data-sign="pos"] { background: var(--pos-fill); }
+  .roll-cols u[data-sign="neg"] { background: var(--neg-fill); }
+
+  .roll-zero {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: var(--axis);
+  }
+
+  /* Where the 12-1 / 6-1 windows stop and the skipped month begins. */
+  .roll-mark {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    border-left: 1px dashed var(--ink-2);
+  }
+
+  .roll-axis {
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid var(--line);
+    padding-top: 4px;
+    margin-top: 3px;
+  }
+
+  .roll-axis span { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  .roll-note {
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: var(--muted);
+    margin: 6px 0 0;
+  }
+
+  .roll-note b { font-weight: 400; color: var(--ink-2); }
+
   .facts {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -580,7 +650,8 @@
         <span><i style="background: var(--neg-fill)"></i> score below 0</span>
       </div>
       <p><b>12-1</b> is the log return from 12 months ago to 1 month ago; <b>6-1</b> runs from 6 months ago to the same point. Skipping the most recent month keeps short-term reversal out of a momentum signal.</p>
-      <p>Each return is annualised and divided by the annualised volatility of daily log returns <i>over that same window</i>, giving a unitless, Sharpe-like number. <code>Blend</code> is the average of the two.</p>
+      <p>Each return is annualised and divided by the annualised volatility of daily log returns <i>over that same window</i>, giving a unitless, Sharpe-like number. <code>Blend</code> is the average of the two. The drawer shows the annualised return, since an 11-month and a 5-month window are not otherwise comparable; the raw window return follows it.</p>
+      <p>The two rolling charts run the identical arithmetic over a trailing 3-month window that slides to the last close, with <i>no</i> skip — the path the two scores are points on, including the recent month they exclude. Each is scaled to its own extreme, so read shape and sign, not height across names.</p>
       <p>Bars run left or right from the centre line, so the sign is readable without relying on colour. They are scaled to <code id="cap-note"></code>; a handful of extreme scores peg the track.</p>
       <p>Universe: the largest US-listed companies in each industry group, cut to roughly 25 apiece, each clearing <code>$15M</code> of median daily dollar volume over the last 63 sessions. Prices are split- and dividend-adjusted.</p>
       <p>Momentum is a statistical tendency measured on past prices. Nothing here is a forecast or investment advice.</p>
@@ -706,7 +777,7 @@
     return d;
   }
 
-  function horizon(label, score, logRet, vol) {
+  function horizon(label, score, annRet, logRet, vol) {
     const row = document.createElement("div");
     row.className = "horizon";
 
@@ -719,12 +790,70 @@
     val.dataset.sign = sign(score);
     val.textContent = fmtScore(score);
 
+    // Annualised first: it is the number the score actually divides, and the
+    // only one comparable between an 11-month and a 5-month window. The raw
+    // window return trails it, since that is what the stock really did.
     const sub = document.createElement("span");
     sub.className = "h-sub";
-    sub.textContent = "log return " + fmtPct(logRet) + "  ·  vol " + fmtVol(vol);
+    sub.textContent = "ann " + fmtPct(annRet) + "  ·  vol " + fmtVol(vol) +
+      "  ·  raw " + fmtPct(logRet);
 
     row.append(lab, bar(score), val, sub);
     return row;
+  }
+
+  /* Rolling trailing-3-month series, sampled weekly, oldest bar first. */
+  function rollChart(label, values, scaleFmt, step) {
+    const wrap = document.createElement("div");
+    wrap.className = "roll";
+
+    // Zero always sits on the axis, but it only sits mid-plot when the series
+    // actually crosses it — a run that never turns negative gets the full height
+    // rather than an empty bottom half.
+    const lo = Math.min(0, ...values);
+    const hi = Math.max(0, ...values);
+    const range = hi - lo || 1;
+    const zeroFromTop = hi / range;
+
+    const head = document.createElement("div");
+    head.className = "roll-head";
+    const lab = document.createElement("span");
+    lab.className = "eyebrow";
+    lab.textContent = label;
+    const scale = document.createElement("span");
+    scale.className = "eyebrow";
+    scale.textContent = scaleFmt(lo) + " – " + scaleFmt(hi);
+    head.append(lab, scale);
+
+    const plot = document.createElement("div");
+    plot.className = "roll-plot";
+
+    const cols = document.createElement("div");
+    cols.className = "roll-cols";
+    for (const v of values) {
+      const col = document.createElement("i");
+      const fill = document.createElement("u");
+      fill.dataset.sign = sign(v);
+      fill.style.height = (Math.abs(v) / range) * 100 + "%";
+      if (v >= 0) fill.style.bottom = (1 - zeroFromTop) * 100 + "%";
+      else fill.style.top = zeroFromTop * 100 + "%";
+      col.append(fill);
+      cols.append(col);
+    }
+
+    const zero = document.createElement("span");
+    zero.className = "roll-zero";
+    zero.style.top = zeroFromTop * 100 + "%";
+
+    // 21 trading days back lands 21/step samples in from the right edge.
+    const mark = document.createElement("span");
+    mark.className = "roll-mark";
+    const i21 = values.length - 1 - 21 / step;
+    mark.style.left = ((i21 + 0.5) / values.length) * 100 + "%";
+
+    plot.append(cols, zero, mark);
+    wrap.append(head, plot);
+    return wrap;
   }
 
   function rowFor(s, i) {
@@ -770,9 +899,35 @@
       art.dataset.open = String(!open);
       if (!open && !detail.dataset.built) {
         detail.append(
-          horizon("12-1", s.score12_1, s.ret12_1, s.vol12),
-          horizon("6-1", s.score6_1, s.ret6_1, s.vol6),
+          horizon("12-1", s.score12_1, s.annRet12_1, s.ret12_1, s.vol12),
+          horizon("6-1", s.score6_1, s.annRet6_1, s.ret6_1, s.vol6),
         );
+
+        if (s.roll) {
+          detail.append(
+            rollChart("Rolling 3-mo return, ann.", s.roll.ann,
+              (v) => (v > 0 ? "+" : v < 0 ? "\u2212" : "") + Math.abs(v * 100).toFixed(0) + "%", s.roll.step),
+            rollChart("Rolling 3-mo, vol-adjusted", s.roll.adj,
+              (v) => (v > 0 ? "+" : v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(1), s.roll.step),
+          );
+
+          const axis = document.createElement("div");
+          axis.className = "roll-axis";
+          const from = document.createElement("span");
+          from.textContent = s.roll.startDate;
+          const to = document.createElement("span");
+          to.textContent = DATA.asOf;
+          axis.append(from, to);
+
+          const note = document.createElement("p");
+          note.className = "roll-note";
+          note.innerHTML = "Trailing 63 sessions, no skip, sampled weekly. " +
+            "<b>Dashed rule</b> marks 21 sessions back — everything to its right is the " +
+            "month the 12-1 and 6-1 scores leave out.";
+
+          detail.append(axis, note);
+        }
+
         const facts = document.createElement("div");
         facts.className = "facts";
         facts.append(

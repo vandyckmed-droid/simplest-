@@ -42,6 +42,8 @@ const compact = {
     beta: round(s.beta, 3),
     ret12_1: round(s.ret12_1, 4),
     ret6_1: round(s.ret6_1, 4),
+    annRet12_1: round(s.annRet12_1, 4),
+    annRet6_1: round(s.annRet6_1, 4),
     vol12: round(s.vol12, 4),
     vol6: round(s.vol6, 4),
     score12_1: round(s.score12_1, 3),
@@ -51,6 +53,14 @@ const compact = {
     rank: s.rank,
     groupRank: s.groupRank,
     groupSize: s.groupSize,
+    // Only the chart reads these, at two decimals — full precision would roughly
+    // double the page for digits nothing renders.
+    roll: s.roll && {
+      step: s.roll.step,
+      startDate: s.roll.startDate,
+      ann: s.roll.ann.map((v) => round(v, 2)),
+      adj: s.roll.adj.map((v) => round(v, 2)),
+    },
   })),
 };
 

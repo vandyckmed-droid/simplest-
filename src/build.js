@@ -6,7 +6,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dailyAdjusted, pooled, screener } from './fmp.js';
 import { groupFor, INDUSTRY_GROUPS, SHORT_LABELS } from './industry-groups.js';
-import { score } from './momentum.js';
+import { rolling, score } from './momentum.js';
 
 const TARGET_PER_GROUP = 25;
 const CANDIDATES_PER_GROUP = 34; // headroom for names that fail history/liquidity
@@ -89,6 +89,7 @@ async function main() {
       price: row.price,
       beta: row.beta,
       ...metrics,
+      roll: rolling(series),
     };
   });
 
@@ -127,6 +128,7 @@ async function main() {
       horizons: ['12-1', '6-1'],
       skipDays: 21,
       formula: 'annualised log return over the window / annualised daily-return volatility over the same window; composite = mean of the two horizons',
+      rolling: 'trailing 63-session window, no skip, sampled every 5 sessions; annualised return and the same return divided by annualised volatility of that window',
       selection: `top ${TARGET_PER_GROUP} US names per industry group by market cap, requiring >= $${MIN_MEDIAN_DOLLAR_VOLUME / 1e6}M median daily dollar volume over the last 63 sessions`,
       source: 'Financial Modeling Prep (split- and dividend-adjusted daily closes)',
     },

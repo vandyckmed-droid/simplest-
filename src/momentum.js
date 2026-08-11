@@ -49,6 +49,50 @@ function window(closes, lookback) {
   return { logReturn, annReturn, annVol, sharpe: annReturn / annVol };
 }
 
+export const ROLL_WINDOW = 63; // ~3 months
+export const ROLL_STEP = 5;    // sample the rolling series weekly
+const MIN_ROLL_POINTS = 8;
+
+/**
+ * The same volatility-adjusted arithmetic as `score`, run over a trailing
+ * 3-month window that slides forward to the last close — no skip. Where the
+ * 12-1 / 6-1 scores are two points, this is the path they sit on, including
+ * the recent month those scores deliberately exclude.
+ *
+ * Samples are weekly and stored oldest-first, so index `i` sits
+ * `(count - 1 - i) * ROLL_STEP` trading days back from the last close. No
+ * per-stock date array is needed to place anything on the axis.
+ *
+ * @param {{date:string, close:number}[]} bars Oldest first.
+ */
+export function rolling(bars) {
+  const closes = bars.map((b) => b.close);
+  const ends = [];
+  for (let i = closes.length - 1; i - ROLL_WINDOW >= 0; i -= ROLL_STEP) ends.push(i);
+  ends.reverse();
+  if (ends.length < MIN_ROLL_POINTS) return null;
+
+  const years = ROLL_WINDOW / TRADING_DAYS_PER_YEAR;
+  const ann = [];
+  const adj = [];
+
+  for (const end of ends) {
+    const start = end - ROLL_WINDOW;
+    const annReturn = Math.log(closes[end] / closes[start]) / years;
+
+    const daily = [];
+    for (let i = start + 1; i <= end; i++) daily.push(Math.log(closes[i] / closes[i - 1]));
+    const mean = daily.reduce((s, x) => s + x, 0) / daily.length;
+    const variance = daily.reduce((s, x) => s + (x - mean) ** 2, 0) / (daily.length - 1);
+    const annVol = Math.sqrt(variance) * Math.sqrt(TRADING_DAYS_PER_YEAR);
+
+    ann.push(annReturn);
+    adj.push(annVol > 0 ? annReturn / annVol : 0);
+  }
+
+  return { window: ROLL_WINDOW, step: ROLL_STEP, startDate: bars[ends[0]].date, ann, adj };
+}
+
 /**
  * @param {{date:string, close:number, volume:number}[]} bars Oldest first.
  */
@@ -72,6 +116,8 @@ export function score(bars) {
   return {
     ret12_1: w12.logReturn,
     ret6_1: w6.logReturn,
+    annRet12_1: w12.annReturn,
+    annRet6_1: w6.annReturn,
     vol12: w12.annVol,
     vol6: w6.annVol,
     score12_1: w12.sharpe,
