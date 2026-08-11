@@ -574,17 +574,6 @@
   const fmtVol = (v) => (v * 100).toFixed(1) + "%";
   const sign = (v) => (v >= 0 ? "pos" : "neg");
 
-  function fmtCap(v) {
-    if (v >= 1e12) return "$" + (v / 1e12).toFixed(2) + "T";
-    if (v >= 1e9) return "$" + (v / 1e9).toFixed(1) + "B";
-    return "$" + Math.round(v / 1e6) + "M";
-  }
-
-  function fmtDollarVol(v) {
-    if (v >= 1e9) return "$" + (v / 1e9).toFixed(2) + "B";
-    return "$" + Math.round(v / 1e6) + "M";
-  }
-
   const state = { group: "__all", sort: "composite", desc: true, query: "" };
 
   /* ---------- chips ---------- */
@@ -744,10 +733,6 @@
         const facts = document.createElement("div");
         facts.className = "facts";
         facts.append(
-          fact("Market cap", fmtCap(s.marketCap)),
-          fact("Median $ vol", fmtDollarVol(s.medianDollarVolume)),
-          fact("Last price", "$" + s.price.toFixed(2)),
-          fact("Beta", s.beta == null ? "—" : s.beta.toFixed(2)),
           fact("Rank in group", s.groupRank + " of " + s.groupSize),
           fact("Rank overall", s.rank + " of " + stocks.length),
           fact("Industry", s.industry + " · " + s.sector, true),
