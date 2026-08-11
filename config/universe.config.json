@@ -1,0 +1,70 @@
+{
+  "version": 2,
+  "description": "Universe definition. Widening the universe is a config change, not a pipeline change: raise perSector, add sectors, relax the screen, or extend history and re-run `npm run build:data`.",
+
+  "perSector": 25,
+  "candidateMultiple": 2.4,
+
+  "screen": {
+    "exchanges": ["NYSE", "NASDAQ", "AMEX"],
+    "country": "US",
+    "minMarketCap": 2000000000,
+    "minScreenerVolume": 250000,
+    "excludeEtf": true,
+    "excludeFund": true,
+    "activelyTradingOnly": true
+  },
+
+  "liquidity": {
+    "note": "Applied to real history, not just the screener snapshot.",
+    "lookbackDays": 60,
+    "minMedianDollarVolume": 10000000,
+    "minPrice": 5,
+    "minTradedDaysRatio": 0.9
+  },
+
+  "selection": {
+    "rankBy": "marketCap",
+    "note": "Within each sector, the largest names that clear every liquidity gate are kept, up to perSector."
+  },
+
+  "history": {
+    "years": 6,
+    "minBarsRequired": 280,
+    "note": "minBarsRequired is the hard floor to enter the universe at all. A name still needs 253 bars for a 12-1 score and 127 for a 6-1 score; short-history names are kept and flagged rather than silently ranked."
+  },
+
+  "industries": {
+    "minCountToTag": 5,
+    "note": "An industry becomes its own ranked, drillable bucket once at least this many universe members belong to it."
+  },
+
+  "sectors": [
+    "Technology",
+    "Financial Services",
+    "Healthcare",
+    "Consumer Cyclical",
+    "Industrials",
+    "Communication Services",
+    "Consumer Defensive",
+    "Energy",
+    "Utilities",
+    "Real Estate",
+    "Basic Materials"
+  ],
+
+  "benchmark": { "symbol": "SPY", "label": "S&P 500" },
+
+  "macro": [
+    { "key": "equities", "symbol": "SPY", "label": "US Equities", "sublabel": "SPY", "kind": "etf" },
+    { "key": "bonds", "symbol": "TLT", "label": "Long Bonds", "sublabel": "TLT", "kind": "etf" },
+    { "key": "oil", "symbol": "USO", "label": "Oil", "sublabel": "USO", "kind": "etf", "fallbacks": ["BNO", "XLE"], "note": "Crude futures history is not available on this API plan, so a liquid oil ETF stands in for the oil series." },
+    { "key": "gold", "symbol": "GCUSD", "label": "Gold", "sublabel": "Spot", "kind": "commodity", "fallbacks": ["GLD"] },
+    { "key": "crypto", "symbol": "BTCUSD", "label": "Bitcoin", "sublabel": "BTC", "kind": "crypto", "fallbacks": ["IBIT"] }
+  ],
+
+  "appBundle": {
+    "chartDays": 520,
+    "note": "How many trailing daily closes ship inside the app bundle. The full history stays in data/prices for any other artifact."
+  }
+}

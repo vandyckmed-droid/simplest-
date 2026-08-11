@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Momentum Desk",
+    "slug": "momentum-desk",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0B0E14",
+    "primaryColor": "#3B82F6",
+    "assetBundlePatterns": ["**/*"],
+    "ios": { "supportsTablet": false },
+    "android": {}
+  }
+}
