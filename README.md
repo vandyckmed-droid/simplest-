@@ -51,14 +51,15 @@ scores.
   direction toggle, and search over ticker and company.
 - A summary strip per filter: median score, best name, share positive, count,
   and a distribution histogram.
-- Each row: rank, ticker, the ranked score with a zero-anchored diverging bar
-  (direction encodes sign, not colour alone), and a micro-line with a
-  colour-coded sector chip (TECH, HLTH, FIN, …) and the company name — there
-  is no drawer.
+- Each row: rank, ticker, the ranked score, and a micro-line with a
+  colour-coded sector chip (TECH, HLTH, FIN, …) and the company name — no
+  per-row bars, no drawer. Sign reads from the explicit +/− on every figure.
 - **Watchlist**: tapping a row adds or removes it; selection persists in
   localStorage. A fixed bottom bar shows the count, the default equal weight
   per name (1/n), and the equal-weighted average blend; `WL` filters the list
-  to the selection, `Clear` empties it.
+  to the selection, `Clear` empties it. In the WL view the score histogram
+  gives way to sector count bars — how many names each sector contributes,
+  in that sector's hue.
 - Single-theme Robinhood-style dark: true black, green #00c805 / red #ff5000.
   That pair is deutan-confusable, so sign always has a redundant channel
   (bar direction and an explicit +/− on every figure).
