@@ -1,0 +1,14 @@
+{
+  "name": "momentum-desk",
+  "version": "1.0.0",
+  "main": "App.js",
+  "private": true,
+  "dependencies": {
+    "expo": "*",
+    "expo-status-bar": "*",
+    "react": "*",
+    "react-native": "*",
+    "react-native-svg": "*",
+    "@react-native-async-storage/async-storage": "*"
+  }
+}

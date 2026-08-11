@@ -1,0 +1,24 @@
+{
+  "name": "momentum-desk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Phone-first momentum, sector and portfolio-risk desk. Data pipeline + Expo app.",
+  "scripts": {
+    "build:data": "NODE_USE_ENV_PROXY=1 node pipeline/src/build.js",
+    "test": "npm run test:analytics && npm run test:data && npm run test:app && npm run test:render",
+    "test:analytics": "node pipeline/scripts/selftest.mjs",
+    "test:data": "node pipeline/scripts/verify-build.mjs",
+    "test:app": "esbuild pipeline/scripts/apptest.mjs --bundle --platform=node --format=esm --outfile=.tmp/apptest.mjs --log-level=error && node .tmp/apptest.mjs",
+    "test:render": "esbuild pipeline/scripts/rendertest.jsx --bundle --platform=node --format=cjs --loader:.js=jsx --outfile=.tmp/rendertest.cjs --log-level=error --alias:react-native=./pipeline/scripts/mocks/react-native.js --alias:react-native-svg=./pipeline/scripts/mocks/react-native-svg.js --alias:@react-native-async-storage/async-storage=./pipeline/scripts/mocks/async-storage.js --alias:expo-status-bar=./pipeline/scripts/mocks/expo-status-bar.js && node .tmp/rendertest.cjs",
+    "start": "cd app && npx expo start"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.0",
+    "react": "18.2.0",
+    "react-test-renderer": "18.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
