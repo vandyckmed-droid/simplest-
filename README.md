@@ -39,15 +39,25 @@ Scan the QR code with Expo Go (Android) or the Camera app (iOS).
 ### Snack
 
 Snack's "Import git repository" button expects the Expo project at the
-repository root. This repo keeps the app in `app/` on purpose — the full price
-history in `data/` is far too large for Snack to load. So either:
+repository root, and this repo keeps the app in `app/` on purpose — the 21 MB of
+price history sitting alongside it would choke that importer. Snack's documented
+[`files` query parameter](https://github.com/expo/snack/blob/main/docs/url-query-parameters.md)
+sidesteps the importer entirely by declaring each file as code loaded from a URL,
+which is what this repo uses.
 
-- open [snack.expo.dev](https://snack.expo.dev), then drag the **contents of the
-  `app/` folder** into the file tree, or
-- point Snack at a repository whose root is a copy of `app/`.
+Regenerate the link (and check every file still resolves) with:
 
-`app/` is fully self-contained: `App.js`, `package.json`, `app.json`, `src/` and
-`data/` (about 1.5 MB) is everything the app needs.
+```bash
+node pipeline/scripts/make-snack-url.mjs --verify
+```
+
+It points at `raw.githubusercontent.com` on `main` by default; pass
+`--ref <sha>` to pin a specific commit. The payload is about 1.7 MB, so the
+first load takes a moment — after that the dataset is bundled and the app runs
+offline.
+
+`app/` is also fully self-contained (`App.js`, `package.json`, `app.json`,
+`src/`, `data/`), so dragging its contents into a blank Snack works too.
 
 ---
 
