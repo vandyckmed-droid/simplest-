@@ -31,24 +31,15 @@ const compact = {
   generatedAt: data.generatedAt,
   asOf: data.asOf,
   groups: data.groups,
+  // Exactly the fields the page renders — the full record stays in
+  // data/screener.json.
   stocks: data.stocks.map((s) => ({
     symbol: s.symbol,
     name: tidyName(s.name),
     group: s.group,
-    industry: s.industry,
-    sector: s.sector,
-    ret12_1: round(s.ret12_1, 4),
-    ret6_1: round(s.ret6_1, 4),
-    annRet12_1: round(s.annRet12_1, 4),
-    annRet6_1: round(s.annRet6_1, 4),
-    vol12: round(s.vol12, 4),
-    vol6: round(s.vol6, 4),
-    score12_1: round(s.score12_1, 3),
-    score6_1: round(s.score6_1, 3),
-    composite: round(s.composite, 3),
-    rank: s.rank,
-    groupRank: s.groupRank,
-    groupSize: s.groupSize,
+    score12_1: round(s.score12_1, 2),
+    score6_1: round(s.score6_1, 2),
+    composite: round(s.composite, 2),
   })),
 };
 

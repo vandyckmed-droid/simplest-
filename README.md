@@ -2,7 +2,9 @@
 
 A cross-sectional momentum screener over large, liquid US stocks, grouped by
 industry and ranked on volatility-adjusted 12-1 and 6-1 returns. Output is a
-single self-contained HTML page designed for a phone.
+single self-contained HTML page designed for a phone: a Robinhood-style dark
+ranked list with a group dropdown, a distribution strip, and a tap-to-build
+equal-weight watchlist.
 
 ```
 npm run build        # refresh prices, rescore, regenerate dist/index.html
@@ -43,11 +45,22 @@ their different lengths, and across names with very different volatility. The
 **blend** that drives the default ranking is the plain average of the two
 scores.
 
-The detail drawer leads with `annReturn`, since an 11-month and a 5-month
-window are not otherwise comparable — Dell's 12-1 and 6-1 raw returns are
-+114% and +127%, which reads as "about the same" until you annualise them to
-+125% and +304%. The raw window return still follows it, because that is what
-the stock actually did.
+## The page
+
+- Group dropdown (native select in a pill), `Blend / 12-1 / 6-1` sort, a
+  direction toggle, and search over ticker and company.
+- A summary strip per filter: median score, best name, share positive, count,
+  and a distribution histogram.
+- Each row: rank, ticker, the ranked score with a zero-anchored diverging bar
+  (direction encodes sign, not colour alone), and a micro-line carrying the
+  name plus both horizon scores inline — there is no drawer.
+- **Watchlist**: tapping a row adds or removes it; selection persists in
+  localStorage. A fixed bottom bar shows the count, the default equal weight
+  per name (1/n), and the equal-weighted average blend; `WL` filters the list
+  to the selection, `Clear` empties it.
+- Single-theme Robinhood-style dark: true black, green #00c805 / red #ff5000.
+  That pair is deutan-confusable, so sign always has a redundant channel
+  (bar direction and an explicit +/− on every figure).
 
 ## The universe
 

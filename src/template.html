@@ -2,11 +2,10 @@
 
 <style>
   /* Single-theme, Robinhood-style dark: true-black ground, green/red signal,
-     pill-shaped controls. Every colour is painted explicitly — the page holds
-     the same look on any host theme, so there are no prefers-color-scheme or
-     data-theme branches to keep in sync. Sign never rides on colour alone:
-     bars run left/right from a centre zero line and every figure carries its
-     own +/− (green/red is the classic deutan-confusable pair). */
+     pill controls. Every colour is painted explicitly so the page holds the
+     same look on any host theme. Sign never rides on colour alone: the bar
+     runs left/right of a centre zero line and every figure carries its own
+     +/− (green/red is the classic deutan-confusable pair). */
   :root {
     --bg: #000000;
     --surface: #131316;
@@ -19,21 +18,17 @@
     --axis: #45454d;
     --pos: #00c805;
     --neg: #ff5000;
-    --pos-fill: #00c805;
-    --neg-fill: #ff5000;
     --track: #1d1d22;
 
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
-    --mono: var(--sans);
   }
 
-  /* ---------- frame ---------- */
   body {
     background: var(--bg);
     color: var(--ink);
     font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.45;
+    font-size: 14px;
+    line-height: 1.4;
     -webkit-text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
@@ -42,26 +37,27 @@
   .shell {
     max-width: 560px;
     margin: 0 auto;
-    padding: 0 0 max(48px, env(safe-area-inset-bottom));
+    /* room for the fixed watchlist bar */
+    padding: 0 0 calc(74px + env(safe-area-inset-bottom));
   }
 
   .eyebrow {
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 500;
-    letter-spacing: .12em;
+    letter-spacing: .1em;
     text-transform: uppercase;
     color: var(--muted);
   }
 
   .num { font-variant-numeric: tabular-nums; }
 
-  :where(button, input, select, summary):focus-visible {
+  :where(button, input, select):focus-visible {
     outline: 2px solid var(--pos);
     outline-offset: 2px;
     border-radius: 999px;
   }
 
-  /* ---------- masthead + sticky controls ---------- */
+  /* ---------- sticky header ---------- */
   .top {
     position: sticky;
     top: 0;
@@ -75,11 +71,11 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 10px;
-    padding: 16px 16px 12px;
+    padding: 14px 16px 10px;
   }
 
   .masthead h1 {
-    font-size: 19px;
+    font-size: 17px;
     font-weight: 700;
     letter-spacing: -.02em;
     white-space: nowrap;
@@ -88,45 +84,49 @@
 
   .masthead .eyebrow { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-  .rail {
+  .controls {
     display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    scroll-snap-type: x proximity;
+    gap: 6px;
     padding: 0 16px 12px;
   }
 
-  .rail::-webkit-scrollbar { display: none; }
+  /* group dropdown: native select in a pill, custom caret */
+  .pick {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
 
-  .chip {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
+  .pick select {
     appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
     border: 0;
+    border-radius: 999px;
     background: var(--surface);
-    color: var(--ink-2);
+    color: var(--ink);
     font-family: inherit;
     font-size: 12.5px;
     font-weight: 600;
-    padding: 8px 14px;
-    min-height: 34px;
-    border-radius: 999px;
-    cursor: pointer;
+    min-height: 36px;
+    padding: 0 26px 0 13px;
     white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
   }
 
-  .chip[aria-pressed="true"] {
-    background: var(--ink);
-    color: #000000;
-  }
-
-  .chip b { font-weight: 500; opacity: .5; margin-left: 5px; }
-
-  .controls {
-    display: flex;
-    gap: 8px;
-    padding: 0 16px 14px;
+  .pick::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    margin-top: -5px;
+    border-right: 1.5px solid var(--muted);
+    border-bottom: 1.5px solid var(--muted);
+    transform: rotate(45deg);
+    pointer-events: none;
   }
 
   .seg {
@@ -135,6 +135,7 @@
     padding: 2px;
     border-radius: 999px;
     background: var(--surface);
+    flex: 0 0 auto;
   }
 
   .seg button {
@@ -143,31 +144,15 @@
     background: transparent;
     color: var(--muted);
     font-family: inherit;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 600;
-    padding: 0 12px;
-    min-height: 34px;
+    padding: 0 10px;
+    min-height: 32px;
     border-radius: 999px;
     cursor: pointer;
   }
 
   .seg button[aria-pressed="true"] { background: var(--ink); color: #000000; }
-
-  .search {
-    flex: 1;
-    min-width: 0;
-    appearance: none;
-    border: 0;
-    border-radius: 999px;
-    background: var(--surface);
-    color: var(--ink);
-    font-family: inherit;
-    font-size: 13px;
-    padding: 0 14px;
-    min-height: 38px;
-  }
-
-  .search::placeholder { color: var(--muted); }
 
   .dir {
     appearance: none;
@@ -178,55 +163,63 @@
     font-family: inherit;
     font-size: 12px;
     font-weight: 600;
-    min-height: 38px;
-    padding: 0 13px;
+    min-height: 36px;
+    min-width: 36px;
+    padding: 0 10px;
     cursor: pointer;
     white-space: nowrap;
+    flex: 0 0 auto;
   }
 
-  /* ---------- summary + distribution strip ---------- */
-  .summary {
-    padding: 16px 16px 12px;
-    border-bottom: 1px solid var(--line-soft);
-  }
-
-  .summary-head {
+  .row2 {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 12px;
+    gap: 6px;
+    padding: 0 16px 12px;
   }
 
-  .summary-head .who {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: -.01em;
-    text-wrap: balance;
+  .search {
+    flex: 1;
+    min-width: 0;
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 12.5px;
+    padding: 0 13px;
+    min-height: 36px;
+  }
+
+  .search::placeholder { color: var(--muted); }
+
+  /* ---------- summary strip ---------- */
+  .summary {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid var(--line-soft);
   }
 
   .stats {
     display: flex;
-    gap: 22px;
-    margin-bottom: 14px;
+    gap: 20px;
+    margin-bottom: 10px;
   }
 
   .stat .k { display: block; }
   .stat .v {
     display: block;
     font-variant-numeric: tabular-nums;
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 700;
     letter-spacing: -.02em;
-    margin-top: 2px;
+    margin-top: 1px;
   }
 
   .hist {
     display: flex;
     align-items: flex-end;
     gap: 2px;
-    height: 40px;
-    position: relative;
+    height: 30px;
   }
 
   .hist i {
@@ -237,55 +230,60 @@
     display: block;
   }
 
-  .hist i[data-sign="pos"] { background: var(--pos-fill); opacity: .8; }
-  .hist i[data-sign="neg"] { background: var(--neg-fill); opacity: .8; }
+  .hist i[data-sign="pos"] { background: var(--pos); opacity: .8; }
+  .hist i[data-sign="neg"] { background: var(--neg); opacity: .8; }
 
   .hist-axis {
     display: flex;
     justify-content: space-between;
     border-top: 1px solid var(--line);
-    padding-top: 4px;
+    padding-top: 3px;
     margin-top: 2px;
   }
 
-  .hist-axis span { font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .hist-axis span { font-size: 9.5px; font-variant-numeric: tabular-nums; color: var(--muted); }
 
-  /* ---------- ranked list ---------- */
+  /* ---------- ranked list; tap a row to add/remove it from the watchlist ---------- */
   .list { display: flex; flex-direction: column; }
 
-  .row { border-bottom: 1px solid var(--line-soft); background: var(--bg); }
-  .row[data-open="true"] { background: var(--surface-sunk); }
-
-  .row-head {
+  .row {
     appearance: none;
     width: 100%;
     border: 0;
-    background: transparent;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--bg);
     color: inherit;
     text-align: left;
     font: inherit;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     display: grid;
-    grid-template-columns: 26px minmax(0, 1fr) auto;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
     column-gap: 10px;
-    row-gap: 4px;
-    padding: 13px 16px 15px;
-    min-height: 64px;
+    row-gap: 3px;
+    padding: 10px 16px 12px;
+    min-height: 56px;
+  }
+
+  .row[aria-pressed="true"] {
+    background: var(--surface-sunk);
+    box-shadow: inset 2px 0 0 var(--pos);
   }
 
   .rank {
     grid-area: 1 / 1 / 4 / 2;
     align-self: center;
     font-variant-numeric: tabular-nums;
-    font-size: 11px;
+    font-size: 10.5px;
     color: var(--muted);
     text-align: right;
   }
 
+  .row[aria-pressed="true"] .rank { color: var(--pos); font-weight: 700; }
+
   .tkr {
     grid-area: 1 / 2 / 2 / 3;
-    font-size: 15.5px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: -.01em;
     align-self: center;
@@ -293,25 +291,21 @@
 
   .meta {
     grid-area: 2 / 2 / 3 / 4;
-    font-size: 12px;
-    color: var(--ink-2);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .meta em {
-    font-style: normal;
-    color: var(--muted);
-  }
-
-  .meta em::before { content: " · "; }
+  .meta b { font-weight: 400; color: var(--ink-2); }
 
   .val {
     grid-area: 1 / 3 / 2 / 4;
     align-self: center;
     font-variant-numeric: tabular-nums;
-    font-size: 16.5px;
+    font-size: 15px;
     font-weight: 700;
     letter-spacing: -.02em;
     text-align: right;
@@ -320,30 +314,14 @@
   .val[data-sign="pos"] { color: var(--pos); }
   .val[data-sign="neg"] { color: var(--neg); }
 
-  .val::after {
-    content: "\203A";
-    display: inline-block;
-    width: 10px;
-    margin-left: 4px;
-    color: var(--axis);
-    font-size: 14px;
-    font-weight: 400;
-  }
-
-  .row[data-open="true"] .val::after { transform: rotate(90deg); }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .val::after { transition: transform .15s ease; }
-  }
-
-  /* zero-anchored diverging bar: direction encodes sign, not colour alone */
-  .row-head .bar { grid-area: 3 / 2 / 4 / 4; margin-top: 4px; }
-
+  /* zero-anchored diverging bar for the ranked metric */
   .bar {
+    grid-area: 3 / 2 / 4 / 4;
     position: relative;
-    height: 6px;
+    height: 5px;
     background: var(--track);
     border-radius: 999px;
+    margin-top: 3px;
   }
 
   .bar::before {
@@ -364,122 +342,90 @@
     border-radius: 999px;
   }
 
-  .bar u[data-sign="pos"] { left: 50%; background: var(--pos-fill); }
-  .bar u[data-sign="neg"] { right: 50%; background: var(--neg-fill); }
-
-  /* ---------- detail drawer ---------- */
-  .detail {
-    padding: 2px 16px 18px;
-    border-top: 1px dashed var(--line);
-  }
-
-  .horizon {
-    display: grid;
-    grid-template-columns: 44px 1fr 56px;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--line-soft);
-  }
-
-  .horizon .h-lab {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: .02em;
-    font-variant-numeric: tabular-nums;
-    color: var(--ink-2);
-  }
-
-  .horizon .bar { height: 5px; }
-  .horizon .h-val { font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 700; text-align: right; }
-  .horizon .h-val[data-sign="pos"] { color: var(--pos); }
-  .horizon .h-val[data-sign="neg"] { color: var(--neg); }
-
-  .horizon .h-sub {
-    grid-column: 2 / 4;
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    color: var(--muted);
-    margin-top: -4px;
-  }
-
-  .facts {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 18px;
-    margin-top: 14px;
-  }
-
-  .fact .k { display: block; }
-  .fact .v {
-    display: block;
-    font-variant-numeric: tabular-nums;
-    font-size: 13.5px;
-    font-weight: 600;
-    color: var(--ink-2);
-    margin-top: 2px;
-  }
-
-  .fact.wide { grid-column: 1 / -1; }
-  .fact.wide .v { font-weight: 400; font-size: 13px; }
-
-  .empty { padding: 40px 16px; text-align: center; color: var(--muted); font-size: 13px; }
-
-  /* ---------- footer ---------- */
-  .method {
-    margin: 20px 16px 0;
-    border-radius: 16px;
-    background: var(--surface);
-  }
-
-  .method summary {
-    cursor: pointer;
-    padding: 14px 16px;
-    font-size: 11.5px;
-    font-weight: 600;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: var(--ink-2);
-    list-style: none;
-    border-radius: 16px;
-  }
-
-  .method summary::-webkit-details-marker { display: none; }
-  .method summary::after { content: " +"; color: var(--muted); }
-  .method[open] summary::after { content: " \2013"; }
-
-  .method-body {
-    padding: 0 16px 16px;
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--ink-2);
-  }
-
-  .method-body p { margin: 0 0 10px; }
-  .method-body p:last-child { margin-bottom: 0; }
-  .method-body code { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--ink); }
-
-  .key {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 14px;
-    align-items: center;
-    margin: 0 0 10px;
-  }
-
-  .key span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
-  .key i { width: 14px; height: 6px; border-radius: 999px; display: block; }
-
-  .colophon {
-    padding: 16px;
-    font-size: 11px;
-    line-height: 1.6;
-    color: var(--muted);
-  }
+  .bar u[data-sign="pos"] { left: 50%; background: var(--pos); }
+  .bar u[data-sign="neg"] { right: 50%; background: var(--neg); }
 
   @media (prefers-reduced-motion: no-preference) {
     .bar u { transition: width .18s ease; }
   }
+
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); font-size: 12.5px; }
+
+  .colophon {
+    padding: 14px 16px;
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  /* ---------- watchlist bar ---------- */
+  .wl {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    background: rgba(10, 10, 12, .92);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .wl-inner {
+    max-width: 560px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .wl-stats {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .wl-stats .k {
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+
+  .wl-stats .v {
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wl-stats .v[data-sign="pos"] { color: var(--pos); }
+  .wl-stats .v[data-sign="neg"] { color: var(--neg); }
+
+  .wl button {
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink-2);
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    min-height: 32px;
+    padding: 0 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+
+  .wl button[aria-pressed="true"] { background: var(--ink); color: #000000; }
+  .wl button:disabled { opacity: .4; cursor: default; }
 
   @media (min-width: 600px) {
     .shell { border-left: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); min-height: 100vh; }
@@ -493,28 +439,27 @@
       <span class="eyebrow" id="asof"></span>
     </div>
 
-    <div class="rail" id="rail" role="group" aria-label="Industry group"></div>
-
     <div class="controls">
+      <div class="pick">
+        <select id="group" aria-label="Industry group"></select>
+      </div>
       <div class="seg" role="group" aria-label="Rank by">
         <button type="button" data-sort="composite" aria-pressed="true">Blend</button>
         <button type="button" data-sort="score12_1" aria-pressed="false">12-1</button>
         <button type="button" data-sort="score6_1" aria-pressed="false">6-1</button>
       </div>
-      <button type="button" class="dir" id="dir" aria-label="Toggle sort direction">↓ best</button>
-      <input class="search" id="search" type="search" placeholder="search" aria-label="Search by ticker, company or industry" />
+    </div>
+
+    <div class="row2">
+      <input class="search" id="search" type="search" placeholder="search" aria-label="Search by ticker or company" />
+      <button type="button" class="dir" id="dir" aria-label="Toggle sort direction">↓</button>
     </div>
   </header>
 
   <section class="summary" aria-live="polite">
-    <div class="summary-head">
-      <span class="who" id="who">All industry groups</span>
-      <span class="eyebrow num" id="count"></span>
-    </div>
-
     <div class="stats">
       <div class="stat">
-        <span class="k eyebrow" id="stat-median-label">Median blend</span>
+        <span class="k eyebrow" id="stat-median-label">Med</span>
         <span class="v" id="stat-median"></span>
       </div>
       <div class="stat">
@@ -522,12 +467,16 @@
         <span class="v" id="stat-best"></span>
       </div>
       <div class="stat">
-        <span class="k eyebrow">Positive</span>
+        <span class="k eyebrow">Pos</span>
         <span class="v" id="stat-pos"></span>
+      </div>
+      <div class="stat">
+        <span class="k eyebrow">N</span>
+        <span class="v" id="count"></span>
       </div>
     </div>
 
-    <div class="hist" id="hist" role="img" aria-label="Distribution of blended scores"></div>
+    <div class="hist" id="hist" role="img" aria-label="Distribution of scores"></div>
     <div class="hist-axis">
       <span id="hist-lo"></span><span>0</span><span id="hist-hi"></span>
     </div>
@@ -535,31 +484,25 @@
 
   <main class="list" id="list"></main>
 
-  <details class="method">
-    <summary>How the score is built</summary>
-    <div class="method-body">
-      <div class="key">
-        <span><i style="background: var(--pos-fill)"></i> score above 0</span>
-        <span><i style="background: var(--neg-fill)"></i> score below 0</span>
-      </div>
-      <p><b>12-1</b> is the log return from 12 months ago to 1 month ago; <b>6-1</b> runs from 6 months ago to the same point. Skipping the most recent month keeps short-term reversal out of a momentum signal.</p>
-      <p>Each return is annualised and divided by the annualised volatility of daily log returns <i>over that same window</i>, giving a unitless, Sharpe-like number. <code>Blend</code> is the average of the two. The drawer shows the annualised return, since an 11-month and a 5-month window are not otherwise comparable; the raw window return follows it.</p>
-      <p>Bars run left or right from the centre line, so the sign is readable without relying on colour. They are scaled to <code id="cap-note"></code>; a handful of extreme scores peg the track.</p>
-      <p>Universe: the largest US-listed companies in each industry group, cut to roughly 25 apiece, each clearing <code>$15M</code> of median daily dollar volume over the last 63 sessions. Prices are split- and dividend-adjusted.</p>
-      <p>Momentum is a statistical tendency measured on past prices. Nothing here is a forecast or investment advice.</p>
-    </div>
-  </details>
-
   <p class="colophon" id="colophon"></p>
 </div>
+
+<footer class="wl" aria-label="Watchlist">
+  <div class="wl-inner">
+    <div class="wl-stats" id="wl-stats"></div>
+    <button type="button" id="wl-view" aria-pressed="false">WL</button>
+    <button type="button" id="wl-clear">Clear</button>
+  </div>
+</footer>
 
 <script>
   const DATA = __DATA__;
 
   const stocks = DATA.stocks;
-  // One fixed cap across every view and horizon, so bar lengths stay comparable
-  // when the filter changes. Set just past the 99.5th percentile rather than the
-  // maximum: a couple of extremes peg the track instead of flattening everyone else.
+
+  // One fixed cap across every view and horizon, so bar lengths stay
+  // comparable when the filter changes. Set just past the 99.5th percentile:
+  // a couple of extremes peg the track instead of flattening everyone else.
   const BAR_CAP = (() => {
     const mags = [];
     for (const s of stocks) {
@@ -570,38 +513,93 @@
   })();
 
   const fmtScore = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
-  const fmtPct = (v) => (v >= 0 ? "+" : "−") + (Math.abs(v) * 100).toFixed(1) + "%";
-  const fmtVol = (v) => (v * 100).toFixed(1) + "%";
   const sign = (v) => (v >= 0 ? "pos" : "neg");
 
-  const state = { group: "__all", sort: "composite", desc: true, query: "" };
+  const state = { group: "__all", sort: "composite", desc: true, query: "", view: "all" };
 
-  /* ---------- chips ---------- */
-  const rail = document.getElementById("rail");
-  const chipSpecs = [{ name: "__all", label: "All", count: stocks.length }]
-    .concat(DATA.groups.map((g) => ({ name: g.name, label: g.short ?? g.name, count: g.count })));
+  /* ---------- watchlist: tap rows to add/remove; equal weight ---------- */
+  const WL_KEY = "momentum-desk-watchlist";
+  const watchlist = new Set();
+  try {
+    for (const t of JSON.parse(localStorage.getItem(WL_KEY) ?? "[]")) watchlist.add(t);
+  } catch {}
 
-  for (const spec of chipSpecs) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip";
-    b.dataset.group = spec.name;
-    b.setAttribute("aria-pressed", String(spec.name === state.group));
-    b.innerHTML = "";
-    b.append(spec.label);
-    const n = document.createElement("b");
-    n.textContent = spec.count;
-    b.append(n);
-    b.addEventListener("click", () => {
-      state.group = spec.name;
-      for (const c of rail.children) c.setAttribute("aria-pressed", String(c.dataset.group === spec.name));
-      b.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
-      render();
-    });
-    rail.append(b);
+  function saveWatchlist() {
+    try { localStorage.setItem(WL_KEY, JSON.stringify([...watchlist])); } catch {}
   }
 
-  /* ---------- controls ---------- */
+  function toggle(symbol) {
+    if (watchlist.has(symbol)) watchlist.delete(symbol);
+    else watchlist.add(symbol);
+    saveWatchlist();
+    if (state.view === "wl") render();
+    else renderWatchlistBar();
+  }
+
+  function renderWatchlistBar() {
+    const host = document.getElementById("wl-stats");
+    host.textContent = "";
+    const stat = (k, v, s) => {
+      const span = document.createElement("span");
+      const key = document.createElement("span");
+      key.className = "k";
+      key.textContent = k;
+      const val = document.createElement("span");
+      val.className = "v num";
+      if (s) val.dataset.sign = s;
+      val.textContent = v;
+      span.append(key, val);
+      host.append(span);
+    };
+
+    const n = watchlist.size;
+    stat("WL", n);
+    if (n) {
+      // Equal weight is the default sizing: 1/n per name.
+      stat("EW", (100 / n).toFixed(n >= 20 ? 2 : 1) + "%");
+      const members = stocks.filter((s) => watchlist.has(s.symbol));
+      const avg = members.reduce((t, s) => t + s.composite, 0) / members.length;
+      stat("Avg", fmtScore(avg), sign(avg));
+    }
+
+    document.getElementById("wl-clear").disabled = !n;
+    for (const b of document.querySelectorAll(".row")) {
+      b.setAttribute("aria-pressed", String(watchlist.has(b.dataset.symbol)));
+    }
+  }
+
+  document.getElementById("wl-view").addEventListener("click", (e) => {
+    state.view = state.view === "wl" ? "all" : "wl";
+    e.currentTarget.setAttribute("aria-pressed", String(state.view === "wl"));
+    render();
+  });
+
+  document.getElementById("wl-clear").addEventListener("click", () => {
+    watchlist.clear();
+    saveWatchlist();
+    render();
+  });
+
+  /* ---------- group dropdown ---------- */
+  const groupSel = document.getElementById("group");
+  {
+    const all = document.createElement("option");
+    all.value = "__all";
+    all.textContent = `All · ${stocks.length}`;
+    groupSel.append(all);
+    for (const g of DATA.groups) {
+      const o = document.createElement("option");
+      o.value = g.name;
+      o.textContent = `${g.short ?? g.name} · ${g.count}`;
+      groupSel.append(o);
+    }
+  }
+  groupSel.addEventListener("change", () => {
+    state.group = groupSel.value;
+    render();
+  });
+
+  /* ---------- sort / direction / search ---------- */
   for (const b of document.querySelectorAll("[data-sort]")) {
     b.addEventListener("click", () => {
       state.sort = b.dataset.sort;
@@ -613,7 +611,7 @@
   const dirBtn = document.getElementById("dir");
   dirBtn.addEventListener("click", () => {
     state.desc = !state.desc;
-    dirBtn.textContent = state.desc ? "↓ best" : "↑ worst";
+    dirBtn.textContent = state.desc ? "↓" : "↑";
     render();
   });
 
@@ -627,70 +625,23 @@
   /* ---------- rendering ---------- */
   function selected() {
     let out = stocks;
+    if (state.view === "wl") out = out.filter((s) => watchlist.has(s.symbol));
     if (state.group !== "__all") out = out.filter((s) => s.group === state.group);
     if (state.query) {
       const q = state.query;
       out = out.filter((s) =>
-        s.symbol.toLowerCase().includes(q) ||
-        s.name.toLowerCase().includes(q) ||
-        s.industry.toLowerCase().includes(q));
+        s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
     }
     const key = state.sort;
     return out.slice().sort((a, b) => (state.desc ? b[key] - a[key] : a[key] - b[key]));
   }
 
-  function bar(value) {
-    const el = document.createElement("div");
-    el.className = "bar";
-    const fill = document.createElement("u");
-    fill.dataset.sign = sign(value);
-    fill.style.width = Math.min(Math.abs(value) / BAR_CAP, 1) * 50 + "%";
-    el.append(fill);
-    return el;
-  }
-
-  function fact(label, value, wide) {
-    const d = document.createElement("div");
-    d.className = "fact" + (wide ? " wide" : "");
-    d.innerHTML = '<span class="k eyebrow"></span><span class="v"></span>';
-    d.querySelector(".k").textContent = label;
-    d.querySelector(".v").textContent = value;
-    return d;
-  }
-
-  function horizon(label, score, annRet, logRet, vol) {
-    const row = document.createElement("div");
-    row.className = "horizon";
-
-    const lab = document.createElement("span");
-    lab.className = "h-lab";
-    lab.textContent = label;
-
-    const val = document.createElement("span");
-    val.className = "h-val num";
-    val.dataset.sign = sign(score);
-    val.textContent = fmtScore(score);
-
-    // Annualised first: it is the number the score actually divides, and the
-    // only one comparable between an 11-month and a 5-month window. The raw
-    // window return trails it, since that is what the stock really did.
-    const sub = document.createElement("span");
-    sub.className = "h-sub";
-    sub.textContent = "ann " + fmtPct(annRet) + "  ·  vol " + fmtVol(vol) +
-      "  ·  raw " + fmtPct(logRet);
-
-    row.append(lab, bar(score), val, sub);
-    return row;
-  }
-
   function rowFor(s, i) {
-    const art = document.createElement("article");
-    art.className = "row";
-
-    const head = document.createElement("button");
-    head.type = "button";
-    head.className = "row-head";
-    head.setAttribute("aria-expanded", "false");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "row";
+    b.dataset.symbol = s.symbol;
+    b.setAttribute("aria-pressed", String(watchlist.has(s.symbol)));
 
     const rank = document.createElement("span");
     rank.className = "rank";
@@ -700,51 +651,29 @@
     tkr.className = "tkr";
     tkr.textContent = s.symbol;
 
-    // One truncating line: who it is, then where it sits. Under "All" that is
-    // the industry group; inside a group the finer FMP industry is the useful bit.
+    // One truncating micro-line: name, then both horizons — the drawer's job,
+    // done inline.
     const meta = document.createElement("span");
     meta.className = "meta";
-    meta.append(s.name);
-    const where = document.createElement("em");
-    where.textContent = state.group === "__all" ? s.group : s.industry;
-    meta.append(where);
+    const nm = document.createElement("b");
+    nm.textContent = s.name;
+    meta.append(nm, ` · 12-1 ${fmtScore(s.score12_1)} · 6-1 ${fmtScore(s.score6_1)}`);
 
     const val = document.createElement("span");
     val.className = "val";
     val.dataset.sign = sign(s[state.sort]);
     val.textContent = fmtScore(s[state.sort]);
 
-    head.append(rank, tkr, val, meta, bar(s[state.sort]));
+    const bar = document.createElement("span");
+    bar.className = "bar";
+    const fill = document.createElement("u");
+    fill.dataset.sign = sign(s[state.sort]);
+    fill.style.width = Math.min(Math.abs(s[state.sort]) / BAR_CAP, 1) * 50 + "%";
+    bar.append(fill);
 
-    const detail = document.createElement("div");
-    detail.className = "detail";
-    detail.hidden = true;
-
-    head.addEventListener("click", () => {
-      const open = head.getAttribute("aria-expanded") === "true";
-      head.setAttribute("aria-expanded", String(!open));
-      art.dataset.open = String(!open);
-      if (!open && !detail.dataset.built) {
-        detail.append(
-          horizon("12-1", s.score12_1, s.annRet12_1, s.ret12_1, s.vol12),
-          horizon("6-1", s.score6_1, s.annRet6_1, s.ret6_1, s.vol6),
-        );
-
-        const facts = document.createElement("div");
-        facts.className = "facts";
-        facts.append(
-          fact("Rank in group", s.groupRank + " of " + s.groupSize),
-          fact("Rank overall", s.rank + " of " + stocks.length),
-          fact("Industry", s.industry + " · " + s.sector, true),
-        );
-        detail.append(facts);
-        detail.dataset.built = "1";
-      }
-      detail.hidden = open;
-    });
-
-    art.append(head, detail);
-    return art;
+    b.append(rank, tkr, val, meta, bar);
+    b.addEventListener("click", () => toggle(s.symbol));
+    return b;
   }
 
   function histogram(values) {
@@ -759,11 +688,10 @@
     const max = Math.max(1, ...counts);
     counts.forEach((c, i) => {
       const mid = LO + ((i + 0.5) / BINS) * (HI - LO);
-      const b = document.createElement("i");
-      b.style.height = Math.max(c ? 2 : 0, (c / max) * 100) + "%";
-      if (c) b.dataset.sign = sign(mid);
-      b.title = c + " name" + (c === 1 ? "" : "s") + " near " + fmtScore(mid);
-      host.append(b);
+      const bar = document.createElement("i");
+      bar.style.height = Math.max(c ? 2 : 0, (c / max) * 100) + "%";
+      if (c) bar.dataset.sign = sign(mid);
+      host.append(bar);
     });
   }
 
@@ -779,19 +707,15 @@
     const key = state.sort;
     const values = rows.map((s) => s[key]);
 
-    document.getElementById("who").textContent =
-      state.group === "__all" ? "All industry groups" : state.group;
-    document.getElementById("count").textContent =
-      rows.length + (state.query ? " matches" : " names");
-
     const metricLabel = { composite: "blend", score12_1: "12-1", score6_1: "6-1" }[key];
-    document.getElementById("stat-median-label").textContent = "Median " + metricLabel;
+    document.getElementById("stat-median-label").textContent = "Med " + metricLabel;
     document.getElementById("stat-median").textContent = rows.length ? fmtScore(median(values)) : "—";
     const best = rows.length ? rows.reduce((m, s) => (s[key] > m[key] ? s : m)) : null;
     document.getElementById("stat-best").textContent = best ? best.symbol : "—";
     document.getElementById("stat-pos").textContent = rows.length
       ? Math.round((values.filter((v) => v > 0).length / values.length) * 100) + "%"
       : "—";
+    document.getElementById("count").textContent = rows.length;
 
     histogram(values);
 
@@ -800,23 +724,26 @@
     if (!rows.length) {
       const p = document.createElement("p");
       p.className = "empty";
-      p.textContent = "Nothing matches that filter.";
+      p.textContent = state.view === "wl"
+        ? "Watchlist is empty — tap rows to add."
+        : "Nothing matches.";
       list.append(p);
-      return;
+    } else {
+      const frag = document.createDocumentFragment();
+      rows.forEach((s, i) => frag.append(rowFor(s, i)));
+      list.append(frag);
     }
-    const frag = document.createDocumentFragment();
-    rows.forEach((s, i) => frag.append(rowFor(s, i)));
-    list.append(frag);
+
+    renderWatchlistBar();
   }
 
-  document.getElementById("cap-note").textContent = "\u00b1" + BAR_CAP.toFixed(1);
-  document.getElementById("hist-lo").textContent = "\u2212" + BAR_CAP.toFixed(1);
+  document.getElementById("hist-lo").textContent = "−" + BAR_CAP.toFixed(1);
   document.getElementById("hist-hi").textContent = "+" + BAR_CAP.toFixed(1);
   document.getElementById("asof").textContent = "close " + DATA.asOf;
   document.getElementById("colophon").textContent =
-    DATA.stocks.length + " names across " + DATA.groups.length +
-    " industry groups · prices from Financial Modeling Prep, split- and dividend-adjusted · built " +
-    DATA.generatedAt.slice(0, 10) + ".";
+    "Score = ann. log return / ann. vol, same window; 12-1 = 252→21d back, 6-1 = 126→21d back; " +
+    "blend = avg. Top ~25/group by cap, $15M+ median $ vol. " +
+    DATA.stocks.length + " names · FMP adj. closes · not investment advice.";
 
   render();
 </script>
