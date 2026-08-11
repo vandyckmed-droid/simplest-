@@ -53,14 +53,6 @@ const compact = {
     rank: s.rank,
     groupRank: s.groupRank,
     groupSize: s.groupSize,
-    // Only the chart reads these, at two decimals — full precision would roughly
-    // double the page for digits nothing renders.
-    roll: s.roll && {
-      step: s.roll.step,
-      startDate: s.roll.startDate,
-      ann: s.roll.ann.map((v) => round(v, 2)),
-      adj: s.roll.adj.map((v) => round(v, 2)),
-    },
   })),
 };
 
