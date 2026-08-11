@@ -1,255 +1,86 @@
 # Momentum Desk
 
-A phone-first app for ranking stocks on risk-adjusted momentum, drilling from the
-broad market down into sectors, industries and individual names, and
-understanding what a basket of them is actually likely to do.
-
-Built as three separate layers so any one of them can be replaced without
-touching the others:
+A cross-sectional momentum screener over large, liquid US stocks, grouped by
+industry and ranked on volatility-adjusted 12-1 and 6-1 returns. Output is a
+single self-contained HTML page designed for a phone.
 
 ```
-config/          what the universe is        (edit this to widen coverage)
-pipeline/        how the data is fetched     (Node, runs offline, writes JSON)
-app/src/analytics/  the maths                (pure functions, no UI, no network)
-app/src/screens/    the interface            (Expo / React Native)
-data/            reusable artifacts          (feeds other views and other apps)
+npm run build        # refresh prices, rescore, regenerate dist/index.html
+npm run data         # just src/build.js  -> data/screener.json
+npm run render       # just src/render.js -> dist/index.html
 ```
 
-The analytics layer is the single source of truth for every number. The pipeline
-imports it to build the dataset, and the app imports the same files to render it,
-so a rank shown on screen cannot drift away from the maths that produced it.
+`API_KEY` must hold a Financial Modeling Prep key. Everything targets FMP's
+`/stable` endpoints; the v3 endpoints are retired for keys issued after
+2025-08-31.
 
----
+## The signal
 
-## Running it on a phone
+For each name, two windows are measured on split- and dividend-adjusted daily
+closes:
 
-The app ships with its dataset bundled, so it works offline and makes no API
-calls while you browse.
-
-### Expo Go (recommended, works every time)
-
-```bash
-git clone <this repo>
-cd simplest-/app
-npx expo start
-```
-
-Scan the QR code with Expo Go (Android) or the Camera app (iOS).
-
-### Snack
-
-Snack's "Import git repository" button expects the Expo project at the
-repository root, and this repo keeps the app in `app/` on purpose — the 21 MB of
-price history sitting alongside it would choke that importer. Snack's documented
-[`files` query parameter](https://github.com/expo/snack/blob/main/docs/url-query-parameters.md)
-sidesteps the importer entirely by declaring each file as code loaded from a URL,
-which is what this repo uses.
-
-Regenerate the link (and check every file still resolves) with:
-
-```bash
-node pipeline/scripts/make-snack-url.mjs --verify
-```
-
-It points at `raw.githubusercontent.com` on `main` by default; pass
-`--ref <sha>` to pin a specific commit. The payload is about 1.7 MB, so the
-first load takes a moment — after that the dataset is bundled and the app runs
-offline.
-
-`app/` is also fully self-contained (`App.js`, `package.json`, `app.json`,
-`src/`, `data/`), so dragging its contents into a blank Snack works too.
-
----
-
-## What the app shows
-
-**Overview** — where the market is (SPY, long bonds, oil, gold, Bitcoin), the
-leading sectors, the leading stocks, and a plain-language read on your own basket.
-
-**Rankings** — all 275 securities. Switch between the 12-1, 6-1 and blended
-measures, rank globally or within sector, filter by sector, sort seven ways, and
-hide names you never want to see. Long-press a row to hide it.
-
-**Sectors** — eleven equal-weight sector series and every industry large enough
-to be ranked, charted and scored with the same framework as individual stocks.
-Every label drills one level narrower.
-
-**Ticker** — price or relative-performance chart with touch scrubbing, comparison
-against SPY / its sector / its industry, and each of the three scores broken open
-to show the return, the volatility, the window length and the observation count
-that produced it.
-
-**Basket** — select stocks, set weights, and get expected movement in money terms
-rather than in sigmas, plus a diversification read, the holdings that add the
-least new information, and what removing each one would do to the risk.
-
-**Search** — any security in the universe by ticker, company name, sector or
-industry.
-
-**Methodology** — every calculation in the app, in the order it happens.
-
-Dark and light themes follow the system setting, or can be pinned in Settings.
-Selections, weights, hidden names and filters persist between sessions.
-
----
-
-## The ranking framework
-
-Prices are dividend- and split-adjusted daily closes. All windows are counted in
-**trading days**, backwards from the latest bar.
-
-| Measure | Window | Definition |
-|---|---|---|
-| **12-1** | 252 → 21 days ago (231 days) | annualised return ÷ annualised volatility |
-| **6-1** | 126 → 21 days ago (105 days) | annualised return ÷ annualised volatility |
-| **Blended** | both | `0.5 × 12-1 + 0.5 × 6-1` |
-
-Both horizons skip the most recent month, which is standard for momentum — the
-latest month tends to mean-revert and would otherwise fight the signal.
-
-- **Return is annualised geometrically**: `(1 + total return) ^ (252 / window days) − 1`,
-  so a 231-day window and a 105-day window are directly comparable.
-- **Volatility is measured over the identical window** as the return: standard
-  deviation of daily log returns × √252.
-- Because both horizons are return-per-unit-of-risk they share units, so the
-  blend is a straight average with no hidden rescaling step.
-
-Each measure gets a **global rank**, a **sector-relative rank**, and a
-**sector-relative z-score**. Industries with at least 5 universe members also get
-their own rank and z-score. Ranking is standard competition ranking, 1 = best:
-ties share a rank and the following numbers are skipped.
-
-Sector and industry series are **equal weight, rebalanced daily**, rebased to 100,
-and then scored with exactly the same framework, so a sector rank means the same
-thing as a stock rank.
-
-### Portfolio risk
-
-Basket volatility uses the full covariance matrix of daily returns over the last
-252 overlapping sessions. Results are expressed as a normal day (1 standard
-deviation), a rough day (1.96 standard deviations — exceeded in either direction
-about one session in twenty), and a month — each in both percent and money.
-
-Diversification is reported as **effective independent positions**: the
-volatility of the basket compared against the weighted average volatility of its
-parts. Hold five names that move as one and it reads 1.0; hold five genuinely
-different bets and it approaches 5.
-
----
-
-## How missing and messy data is handled
-
-Nothing is silently repaired.
-
-- **Short history** — a name needs 253 daily bars for a 12-1 score and 127 for a
-  6-1 score. Without them it shows a dash and an explanation, never a score built
-  from a shorter window. Missing either horizon means no blended score.
-- **Duplicate listings** — companies with multiple share classes are collapsed to
-  their most liquid line, matched on CIK where the provider supplies one and on a
-  normalised company name otherwise. This build folded away GOOG, FOX, NWS, ZG and
-  LLYVK.
-- **Gaps** — a day a security did not trade is recorded as "no observation", never
-  as a flat day, so a gap cannot masquerade as zero volatility. Chart lines break
-  across gaps rather than drawing a false straight run.
-- **Trading calendar** — the shared calendar is built from equity sessions only.
-  Bitcoin trades weekends; letting its dates in would have stretched "252 trading
-  days" across about nine months of real market activity. Non-equity instruments
-  are sampled onto the equity calendar instead.
-- **Correlations** — only dates where *every* selected holding traded are used, so
-  relationships are measured on genuinely simultaneous observations.
-- **Bad prints** — bars with a high below the low, a non-positive close, or a
-  duplicated date are repaired or dropped, and the count is recorded in
-  `data/manifest.json`.
-- **Failures degrade** — if a logo, a secondary source or a single symbol fails,
-  the universe, rankings, charts and portfolio maths carry on. Where a market was
-  not available on the current API plan (crude futures history), a liquid ETF
-  stands in and the substitution is labelled in the app.
-
----
-
-## Rebuilding the data
-
-```bash
-export API_KEY=<your Financial Modeling Prep key>
-npm install
-npm run build:data
-npm test
-```
-
-The pipeline caches every provider response on disk (`.cache/`, gitignored), so
-re-running it after a config change costs seconds rather than re-downloading
-everything.
-
-### Widening the universe
-
-Everything selectable lives in `config/universe.config.json`. Nothing downstream
-is hard-coded to 25 names or to a particular sector list:
-
-```jsonc
-{
-  "perSector": 25,              // raise for a deeper universe
-  "sectors": [ ... ],           // add or remove sectors
-  "screen":    { "minMarketCap": 2000000000, ... },
-  "liquidity": { "minMedianDollarVolume": 10000000, "minPrice": 5, ... },
-  "history":   { "years": 6, "minBarsRequired": 280 },
-  "industries": { "minCountToTag": 5 },   // when an industry becomes its own group
-  "appBundle": { "chartDays": 520 }       // how much history ships in the app
-}
-```
-
-Selection order is: screen the market → keep the largest candidates per sector →
-fetch real history → apply liquidity gates measured from actual bars (not a
-screener snapshot) → collapse duplicate listings → take the top N per sector.
-
----
-
-## Reusing the data
-
-`data/` is plain JSON with no app-specific shaping, so other views can be built
-from it without running the pipeline again:
-
-| File | Contents |
+| Horizon | Window |
 |---|---|
-| `data/universe.json` | 275 securities with scores, all ranks, z-scores, ATR, returns and score components |
-| `data/sectors.json` | equal-weight sector and industry series with their ranks |
-| `data/macro.json` | the five macro series on the equity calendar |
-| `data/prices/<TICKER>.json` | full 6-year adjusted OHLCV, one file per ticker |
-| `data/manifest.json` | build time, trading date, full config, and every data-quality note |
+| **12-1** | 252 trading days ago → 21 trading days ago |
+| **6-1** | 126 trading days ago → 21 trading days ago |
 
-Per-ticker OHLCV is kept deliberately so rankings, charts, volatility, ATR and
-sector series can all be recomputed locally without rebuilding the dataset. A
-healthcare-only build, for instance, is a filter over `data/universe.json` plus
-the matching files in `data/prices/` — no API calls.
+Both skip the most recent month. That gap is standard in momentum work: the
+last few weeks of a stock's return tend to mean-revert, so including them
+mixes a reversal signal into a momentum one.
 
----
+Each window produces:
 
-## Tests
-
-```bash
-npm test
+```
+logReturn  = ln(P_end / P_start)
+annReturn  = logReturn / (window length in years)
+annVol     = stdev(daily log returns inside the window) * sqrt(252)
+score      = annReturn / annVol
 ```
 
-| Suite | What it proves |
-|---|---|
-| `test:analytics` | 66 checks of the maths against hand-computable cases — annualisation, tie-handling in ranks, ATR on known bars, equal-weight compounding, diversification of identical vs independent holdings |
-| `test:data` | recomputes momentum and a whole sector index from the raw bar files, independently of the pipeline's own code path, and checks ranks, z-scores and bundle integrity |
-| `test:app` | runs the app's real data layer and portfolio engine against the real dataset, including single-holding, zero-weight and 25-holding baskets |
-| `test:render` | mounts the app and all ten screens against the real dataset in both themes, and asserts real content reaches the tree |
+Numerator and denominator describe the identical stretch of tape, so the score
+is a Sharpe-like, unitless number — comparable across the two horizons despite
+their different lengths, and across names with very different volatility. The
+**blend** that drives the default ranking is the plain average of the two
+scores.
 
----
+## The universe
 
-## Data sources
+FMP's own industry taxonomy has ~130 entries, and only five of them contain 25
+or more US companies above $3B in market cap — far too granular to fill
+25-name buckets. `src/industry-groups.js` folds those industries into 22
+GICS-style **industry groups**, which is coarse enough to rank within and much
+finer than the 11-sector level. Each stock still carries its original FMP
+industry, shown in the detail drawer.
 
-Prices, fundamentals, the screener and company logos come from
-[Financial Modeling Prep](https://site.financialmodelingprep.com/). Each ticker
-links to the company website and to Wikipedia for background. Logos load from the
-provider's CDN with a monogram fallback, and are cached by the image layer.
+Per group, selection runs:
 
-The API key is read from the `API_KEY` environment variable by the pipeline only.
-It is never written into the dataset, never committed, and never shipped to the
-phone — the app contains data, not credentials.
+1. US-listed common stock, actively trading, market cap ≥ $2B, non-ETF/fund.
+2. Take the 34 largest by market cap as candidates.
+3. Drop anything without a full 12-1 window of history, or with median daily
+   dollar volume below $15M over the last 63 sessions.
+4. Keep the top 25 by market cap, then rank those on the signal.
 
----
+Size and liquidity are entry requirements only — they never enter the ranking.
+Two groups (Pharmaceuticals, Consumer Finance & Payments) come up a few names
+short because the underlying industries simply do not contain 25 qualifying
+large caps; the rest hit 25.
 
-*This is a research and educational tool. Nothing in it is investment advice, and
-past movement is not a forecast of future movement.*
+## Layout
+
+```
+src/industry-groups.js   FMP industry -> industry group, plus chip abbreviations
+src/fmp.js               /stable client: retries, bounded concurrency
+src/momentum.js          the windowing and scoring math
+src/build.js             universe -> prices -> scores -> data/screener.json
+src/template.html        the page; __DATA__ is the injection point
+src/render.js            inlines the JSON, writes dist/index.html
+```
+
+`dist/index.html` is fully self-contained — the data is embedded, there are no
+network requests, and it renders in light or dark according to the viewer's
+theme.
+
+## Caveats
+
+Momentum is a statistical tendency measured on past prices. Nothing produced
+here is a forecast or investment advice.
