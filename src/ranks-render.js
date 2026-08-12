@@ -31,17 +31,36 @@ const data = JSON.parse(await readFile(new URL('../data/ranks.json', import.meta
 const sectors = data.sectors.map((s) => s.name);
 const sectorIndex = new Map(sectors.map((name, i) => [name, i]));
 
+// Sector abbreviations for the concentration flag; the label has to carry the
+// meaning on its own at 10px.
+const ABBR = {
+  'Technology': 'TECH',
+  'Communication Services': 'COMM',
+  'Healthcare': 'HLTH',
+  'Financial Services': 'FIN',
+  'Energy': 'ENRG',
+  'Consumer Cyclical': 'CYCL',
+  'Consumer Defensive': 'DFNS',
+  'Industrials': 'INDL',
+  'Basic Materials': 'MATL',
+  'Real Estate': 'RE',
+  'Utilities': 'UTIL',
+};
+
 const compact = {
   asOf: data.asOf,
   sectors,
+  abbr: sectors.map((name) => ABBR[name] ?? name.slice(0, 4).toUpperCase()),
   // Only what the page renders. `c` is the base64 correlation vector.
   stocks: data.stocks.map((s) => ({
     symbol: s.symbol,
     name: tidyName(s.name),
     k: sectorIndex.get(s.sector) ?? 0,
-    composite: round(s.composite, 2),
-    annRet: round(s.annRet, 3),
-    annVol: round(s.annVol, 3),
+    // [blend, 12-1, 6-1] for each of score, return and volatility, so the
+    // metric switch moves all three columns together.
+    sc: [round(s.composite, 2), round(s.score12_1, 2), round(s.score6_1, 2)],
+    rt: [round(s.annRet, 3), round(s.annRet12_1, 3), round(s.annRet6_1, 3)],
+    vl: [round(s.annVol, 3), round(s.vol12, 3), round(s.vol6, 3)],
     c: s.corr,
   })),
 };

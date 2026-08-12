@@ -16,6 +16,8 @@
     --pos: #12784a;
     --neg: #b03a2e;
     --sel: #f2f4f7;
+    --flag: #9a5b12;
+    --flag-bg: #f6efe4;
 
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
   }
@@ -32,6 +34,8 @@
       --pos: #46cf85;
       --neg: #ef6f60;
       --sel: #16181d;
+      --flag: #e0a95c;
+      --flag-bg: #221c12;
     }
   }
 
@@ -46,6 +50,8 @@
     --pos: #46cf85;
     --neg: #ef6f60;
     --sel: #16181d;
+    --flag: #e0a95c;
+    --flag-bg: #221c12;
   }
 
   body {
@@ -225,26 +231,68 @@
     letter-spacing: -.01em;
   }
 
-  .id i {
-    display: block;
+  /* Name line: the company name gives way to the flags rather than pushing
+     them into the numbers. */
+  .sub {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    margin-top: 1px;
+  }
+
+  .sub i {
     font-style: normal;
     font-size: 10.5px;
     color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-top: 1px;
+    min-width: 0;
   }
 
-  /* correlation flag: one dim glyph, never colour, with the twin named in the
-     accessible label */
-  .id b em {
+  /* Flags are the one place a second hue appears. Both carry their own number,
+     so the colour is emphasis rather than the message. */
+  .sub em {
+    flex: 0 0 auto;
     font-style: normal;
-    font-weight: 400;
-    font-size: 11px;
-    color: var(--muted);
-    margin-left: 4px;
+    font-weight: 600;
+    font-size: 9.5px;
+    letter-spacing: .02em;
+    color: var(--flag);
+    background: var(--flag-bg);
+    border-radius: 3px;
+    padding: 1.5px 4px;
+    white-space: nowrap;
   }
+
+  /* metric switch: plain text, no chrome */
+  .metric {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 16px 10px;
+  }
+
+  .metric button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 2px 0;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .metric button[aria-pressed="true"] {
+    color: var(--ink);
+    box-shadow: inset 0 -1.5px 0 var(--ink);
+  }
+
+  .metric .sp { flex: 1; }
 
   .n {
     font-size: 12.5px;
@@ -355,6 +403,13 @@
 
     <div class="filters" id="filters">
       <input id="q" type="search" placeholder="search" aria-label="Search ticker or company" />
+    </div>
+
+    <div class="metric" id="metric" role="group" aria-label="Metric">
+      <button type="button" data-metric="0" aria-pressed="true">Blend</button>
+      <button type="button" data-metric="1" aria-pressed="false">12-1</button>
+      <button type="button" data-metric="2" aria-pressed="false">6-1</button>
+      <span class="sp"></span>
       <div class="pick">
         <select id="sector" aria-label="Sector"></select>
       </div>
@@ -363,9 +418,9 @@
     <div class="head grid" id="head">
       <span class="lbl">#</span>
       <span class="lbl l">Ticker</span>
-      <button type="button" data-sort="composite" data-dir="↓" aria-pressed="true">Score</button>
-      <button type="button" data-sort="annRet" data-dir="↓" aria-pressed="false">Ret</button>
-      <button type="button" data-sort="annVol" data-dir="↑" aria-pressed="false">Vol</button>
+      <button type="button" data-sort="score" data-dir="↓" aria-pressed="true" id="h-score">Blend</button>
+      <button type="button" data-sort="ret" data-dir="↓" aria-pressed="false">Ret</button>
+      <button type="button" data-sort="vol" data-dir="↑" aria-pressed="false">Vol</button>
     </div>
   </header>
 
@@ -383,12 +438,23 @@
   const DATA = __DATA__;
 
   const SECTORS = DATA.sectors;
+  const ABBR = DATA.abbr;
   const stocks = DATA.stocks.map((s, i) => ({ ...s, i, sector: SECTORS[s.k] }));
   const N = stocks.length;
   const T = 52; // weekly returns per correlation vector
 
-  const CORR_FLAG = 0.70;
+  const CORR_FLAG = 0.60;
+  // A sector only counts as crowded once there is enough of a basket for the
+  // share to mean anything.
+  const SECTOR_FLAG = 0.30;
+  const SECTOR_MIN = 3;
   const PAGE = 120;
+
+  // 0 = blend, 1 = 12-1, 2 = 6-1; the switch moves score, ret and vol together.
+  const METRICS = ["Blend", "12-1", "6-1"];
+  const sc = (s) => s.sc[state.metric];
+  const rt = (s) => s.rt[state.metric];
+  const vl = (s) => s.vl[state.metric];
 
   /* ---------- correlation vectors ----------
      Each stock ships 52 standardised weekly log returns as int8. Re-centre and
@@ -435,12 +501,26 @@
     for (const t of JSON.parse(localStorage.getItem(WL_KEY) ?? "[]")) picked.add(t);
   } catch {}
 
-  const state = { view: "ranks", sort: "composite", desc: true, q: "", sector: "" };
+  const state = { view: "ranks", sort: "score", desc: true, q: "", sector: "", metric: 0 };
 
   // Highest correlation between each stock and anything currently held. Kept as
   // an array so rows can be flagged without recomputing per render.
   const maxRho = new Float32Array(N);
   const maxWith = new Int32Array(N);
+
+  // Share of the basket already sitting in each sector.
+  let sectorShare = new Map();
+
+  function recomputeSectors() {
+    sectorShare = new Map();
+    const held = stocks.filter((s) => picked.has(s.symbol));
+    if (held.length < SECTOR_MIN) return;
+    const counts = new Map();
+    for (const s of held) counts.set(s.k, (counts.get(s.k) ?? 0) + 1);
+    for (const [k, n] of counts) {
+      if (n >= SECTOR_MIN && n / held.length >= SECTOR_FLAG) sectorShare.set(k, n / held.length);
+    }
+  }
 
   function recomputeCorr() {
     maxRho.fill(-2);
@@ -471,12 +551,15 @@
     else picked.add(symbol);
     save();
     recomputeCorr();
+    recomputeSectors();
     render();
   }
 
   /* ---------- inverse-volatility weights ---------- */
   function weights(held) {
-    const inv = held.map((s) => 1 / Math.max(s.annVol, 1e-6));
+    // Sizing always uses the blended volatility — the displayed metric changes
+    // what you are reading, not how the basket is built.
+    const inv = held.map((s) => 1 / Math.max(s.vl[0], 1e-6));
     const total = inv.reduce((a, b) => a + b, 0);
     return held.map((s, i) => ({ s, w: inv[i] / total }));
   }
@@ -504,12 +587,16 @@
     timer = setTimeout(() => { state.q = v; render(); }, 120);
   });
 
+  for (const b of document.querySelectorAll("[data-metric]")) {
+    b.addEventListener("click", () => { state.metric = +b.dataset.metric; render(); });
+  }
+
   for (const b of document.querySelectorAll("[data-sort]")) {
     b.addEventListener("click", () => {
       // Same column taps flip direction; a new column opens on its natural one
       // — high score and return first, low volatility first.
       if (state.sort === b.dataset.sort) state.desc = !state.desc;
-      else { state.sort = b.dataset.sort; state.desc = b.dataset.sort !== "annVol"; }
+      else { state.sort = b.dataset.sort; state.desc = b.dataset.sort !== "vol"; }
       render();
     });
   }
@@ -527,8 +614,8 @@
       out = out.filter((s) =>
         s.symbol.toLowerCase().includes(state.q) || s.name.toLowerCase().includes(state.q));
     }
-    const k = state.sort;
-    return out.slice().sort((a, b) => (state.desc ? b[k] - a[k] : a[k] - b[k]));
+    const f = { score: sc, ret: rt, vol: vl }[state.sort];
+    return out.slice().sort((a, b) => (state.desc ? f(b) - f(a) : f(a) - f(b)));
   }
 
   function cell(v, cls, sgn) {
@@ -556,27 +643,43 @@
     id.className = "id";
     const tkr = document.createElement("b");
     tkr.textContent = s.symbol;
-    const flagged = maxRho[s.i] >= CORR_FLAG && maxWith[s.i] >= 0;
-    if (flagged) {
-      const em = document.createElement("em");
-      em.textContent = "≈";
-      em.title = `ρ ${maxRho[s.i].toFixed(2)} with ${stocks[maxWith[s.i]].symbol}`;
-      em.setAttribute("aria-label", `correlated ${maxRho[s.i].toFixed(2)} with ${stocks[maxWith[s.i]].symbol}`);
-      tkr.append(em);
-    }
+
+    const sub = document.createElement("span");
+    sub.className = "sub";
     const nm = document.createElement("i");
     nm.textContent = s.name;
-    id.append(tkr, nm);
+    sub.append(nm);
+
+    if (maxRho[s.i] >= CORR_FLAG && maxWith[s.i] >= 0) {
+      const twin = stocks[maxWith[s.i]].symbol;
+      const em = document.createElement("em");
+      em.textContent = "≈" + maxRho[s.i].toFixed(2).slice(1) + " " + twin;
+      em.title = `correlation ${maxRho[s.i].toFixed(2)} with ${twin}`;
+      em.setAttribute("aria-label", `correlated ${maxRho[s.i].toFixed(2)} with ${twin}`);
+      sub.append(em);
+    }
+
+    const share = sectorShare.get(s.k);
+    if (share !== undefined) {
+      const em = document.createElement("em");
+      // The sector name is redundant once the list is filtered to it.
+      const pct = Math.round(share * 100) + "%";
+      em.textContent = state.sector === s.sector ? pct : ABBR[s.k] + " " + pct;
+      em.title = `${pct} of the basket is already ${s.sector}`;
+      em.setAttribute("aria-label", `${pct} of the basket is already ${s.sector}`);
+      sub.append(em);
+    }
+    id.append(tkr, sub);
     b.append(id);
 
     if (state.view === "basket") {
       b.append(cell(fmtPct(weight), "score"));
-      b.append(cell(fmtScore(s.composite), "", sign(s.composite)));
-      b.append(cell(fmtPct(s.annVol)));
+      b.append(cell(fmtScore(sc(s)), "", sign(sc(s))));
+      b.append(cell(fmtPct(vl(s))));
     } else {
-      b.append(cell(fmtScore(s.composite), "score", sign(s.composite)));
-      b.append(cell(fmtPct(s.annRet)));
-      b.append(cell(fmtPct(s.annVol)));
+      b.append(cell(fmtScore(sc(s)), "score", sign(sc(s))));
+      b.append(cell(fmtPct(rt(s))));
+      b.append(cell(fmtPct(vl(s))));
     }
 
     b.addEventListener("click", () => toggle(s.symbol));
@@ -633,10 +736,10 @@
     sum.hidden = false;
 
     const w = weights(held);
-    w.sort((a, b) => b.s.composite - a.s.composite);
+    w.sort((a, b) => sc(b.s) - sc(a.s));
 
-    const avgScore = held.reduce((t, s) => t + s.composite, 0) / held.length;
-    const wVol = w.reduce((t, x) => t + x.w * x.s.annVol, 0);
+    const avgScore = held.reduce((t, s) => t + sc(s), 0) / held.length;
+    const wVol = w.reduce((t, x) => t + x.w * x.s.vl[0], 0);
     const line = (k, v) => {
       const row = document.createElement("div");
       row.className = "sum-row";
@@ -647,7 +750,7 @@
       row.append(a, b);
       sum.append(row);
     };
-    line("Avg score", fmtScore(avgScore));
+    line("Avg " + METRICS[state.metric].toLowerCase(), fmtScore(avgScore));
     line("Weighted vol", fmtPct(wVol));
     line("Largest weight", fmtPct(Math.max(...w.map((x) => x.w))));
 
@@ -678,10 +781,16 @@
     const basket = state.view === "basket";
     document.getElementById("heading").textContent = basket ? "Basket" : "Ranks";
     document.getElementById("filters").hidden = basket;
+    document.getElementById("metric").hidden = basket;
     document.getElementById("head").hidden = basket;
     document.getElementById("sum").hidden = !basket;
     document.getElementById("tab-ranks").setAttribute("aria-pressed", String(!basket));
     document.getElementById("tab-basket").setAttribute("aria-pressed", String(basket));
+
+    for (const b of document.querySelectorAll("[data-metric]")) {
+      b.setAttribute("aria-pressed", String(+b.dataset.metric === state.metric));
+    }
+    document.getElementById("h-score").textContent = METRICS[state.metric];
 
     for (const b of document.querySelectorAll("[data-sort]")) {
       const on = b.dataset.sort === state.sort;
@@ -697,12 +806,14 @@
   }
 
   document.getElementById("note").textContent =
-    "Score = mean of 12-1 and 6-1 volatility-adjusted momentum; each is the window's annualised log " +
-    "return over its own annualised volatility. Ret and vol are averaged across the same two windows. " +
-    "≈ marks a name correlating " + CORR_FLAG.toFixed(2) + " or higher with something already held, on 52 weekly returns. " +
-    "US common stock on NYSE/Nasdaq/AMEX, $5+ and $25M+ median daily dollar volume; preferreds, units and " +
-    "duplicate share classes removed. Not investment advice.";
+    "Each score is a window's annualised log return over its own annualised volatility. Blend is the mean " +
+    "of 12-1 and 6-1; switching the metric switches score, ret and vol together. Basket weights are 1/vol " +
+    "on the blend, normalised. \u2248 flags a name correlating " + CORR_FLAG.toFixed(2) + "+ with a single holding, on 52 " +
+    "weekly returns; the sector tag flags one already at " + Math.round(SECTOR_FLAG * 100) + "%+ of the basket " +
+    "(min " + SECTOR_MIN + " names). US common stock on NYSE/Nasdaq/AMEX, $5+ and $25M+ median daily dollar " +
+    "volume; preferreds, units and duplicate share classes removed. Not investment advice.";
 
   recomputeCorr();
+  recomputeSectors();
   render();
 </script>

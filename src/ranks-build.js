@@ -121,6 +121,13 @@ async function main() {
       score6_1: metrics.score6_1,
       annRet: (metrics.annRet12_1 + metrics.annRet6_1) / 2,
       annVol: (metrics.vol12 + metrics.vol6) / 2,
+      // Per-window figures too, so switching the displayed metric switches
+      // score, return and volatility together rather than leaving two of the
+      // three describing a different window.
+      annRet12_1: metrics.annRet12_1,
+      annRet6_1: metrics.annRet6_1,
+      vol12: metrics.vol12,
+      vol6: metrics.vol6,
       medianDollarVolume: metrics.medianDollarVolume,
       corr: corr.b64,
       corrExact: corr.exact,

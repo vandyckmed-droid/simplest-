@@ -147,9 +147,26 @@ checks the quantised vectors against exact correlations on every run and
 reports the error (currently max |Δρ| ≈ 0.009, mean ≈ 0.002 — far below the
 0.70 flag threshold).
 
-A row is flagged `≈` when it correlates ≥0.70 with **any single name already
-held**. Holding JPM, XOM and BAC flags 6 of 1,508 — CVX and COP against XOM,
-WFC/C/CFG/RF against BAC. Rare by design.
+A row is flagged when it correlates ≥0.60 with **any single name already
+held**; the tag names the twin and the figure (`≈.84 JPM`). Holding a
+diversified eight-name mega-cap basket flags 52 of 1,503.
+
+A second tag flags **sector concentration**: the row's sector is already ≥30%
+of the basket, with at least three names in it — below that a percentage is
+too noisy to mean anything. The tag drops its sector label when the list is
+already filtered to that sector, since the dropdown above says it. A
+diversified eight-sector basket trips neither tag.
+
+Both tags share one accent hue, the only colour on the page besides the score,
+and both carry their own number so the colour is emphasis rather than the
+message.
+
+## Metrics
+
+`Blend / 12-1 / 6-1` switches score, return **and** volatility together — the
+alternative leaves two of the three columns describing a different window than
+the one you selected. Weights always size on blended volatility: changing the
+displayed metric changes what you are reading, not how the basket is built.
 
 ## Weights
 
