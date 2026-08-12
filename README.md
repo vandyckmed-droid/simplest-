@@ -20,19 +20,25 @@ npm run etf:check    # is every fund in the list still trading?
 
 ## The signal
 
-For each name, two windows are measured on split- and dividend-adjusted daily
-closes:
+A window has two edges, and both are settings on the page:
 
-| Horizon | Window |
-|---|---|
-| **12-1** | 252 trading days ago → 21 trading days ago |
-| **6-1** | 126 trading days ago → 21 trading days ago |
+| Edge | Setting | Values |
+|---|---|---|
+| where it **opens** | Window | 252 trading days back (12 mo), 126 (6 mo), or the blend of both |
+| where it **closes** | Skip | 0, 10 or 21 trading days short of today — 0%, 50%, 100% of a month |
 
-Both skip the most recent month. That gap is standard in momentum work: the
-last few weeks of a stock's return tend to mean-revert, so including them mixes
-a reversal signal into a momentum one.
+The conventional definition is the 100% skip: that is the "-1" in 12-1 and 6-1,
+and it is standard in momentum work because the last few weeks of a stock's
+return tend to mean-revert, so including them mixes a reversal signal into a
+momentum one.
 
-Each window produces:
+It is also worth being able to switch off, which is why it is a toggle rather
+than a constant. A name can rank badly on a window that closed a month ago and
+have turned since — GDX sits 81st of 89 funds on the conventional definition
+while being up 23% over the skipped month. That is a fact about the measurement,
+not about the fund, and the page should not hide it.
+
+Every name is measured at all six combinations. Each produces:
 
 ```
 logReturn  = ln(P_end / P_start)
@@ -42,9 +48,16 @@ score      = annReturn / annVol
 ```
 
 Numerator and denominator describe the identical stretch of tape, so the score
-is a Sharpe-like, unitless number — comparable across the two horizons despite
-their different lengths, and across names with very different volatility. The
-**blend** that drives the default ranking is the plain average of the two.
+is a Sharpe-like, unitless number — comparable across horizons despite their
+different lengths, and across names with very different volatility. The
+**blend** is the plain average of the 12-month and 6-month scores at whichever
+skip is selected.
+
+Only `annReturn` and `annVol` ship, six of each. Score is a division and blend
+is a mean, so a third array would be arithmetic the page can do itself. Moving
+either edge re-ranks the list positionally — the stored rank is the conventional
+definition, and the displayed one is always the position in the list you are
+looking at.
 
 ## The universe
 
@@ -90,23 +103,22 @@ eight pins that turned to mush at 12px and now has four, and Industrials was
 an eight-tooth gear that read as a *sun* and is now a factory silhouette.
 Anything meant to be legible at 12px has to be checked at 12px.
 
-## Metrics
+## Window and Skip
 
-`Blend / 12-1 / 6-1`, in Settings, switches score, return **and** volatility
+Two settings, one per edge. **Window** switches score, return **and** volatility
 together — the alternative leaves two of the three columns describing a
-different window than the one you selected. The active metric names the score
-column, so it stays visible from the list.
+different stretch than the one you selected — and names the score column, so it
+stays visible from the list. **Skip** tags itself beside the count whenever it is
+not the conventional 100%, the same way an active market-cap cutoff does.
 
-The switch looks like it ought to be redundant and is not: only **12 of the top
-25** names are shared between Blend and 12-1 (28 of 50, 57 of 100), and 12-1 and
-6-1 rank-correlate 0.673. Three genuinely different lists, for the 64 KB the
-extra two cost.
+Neither is redundant. Only **12 of the top 25** names are shared between Blend
+and 12 mo (28 of 50, 57 of 100), and the two lookbacks rank-correlate 0.673.
 
 ## Settings
 
 A third tab, holding everything that changes what the list shows or how the
-basket is built: **universe**, **weights**, **display**, **metric** and a
-**market cap** cutoff. None of it lives in the Ranks header — that keeps the
+basket is built: **universe**, **weights**, **display**, **window**, **skip** and
+a **market cap** cutoff. None of it lives in the Ranks header — that keeps the
 list itself to a search box, a sector dropdown and the column headers.
 
 "Top 500 largest" is stored as a *rank*, not a dollar line — an absolute
@@ -168,9 +180,13 @@ theme.
 It used to carry 252 daily log returns per name, quantised to int8 and base64'd,
 because a hierarchical-risk-parity allocator and an "already represented" flag
 both needed a covariance matrix over whatever the reader happened to pick. Both
-are gone, and with them 71% of the page: **821 KB down to 243 KB**. The builds no
-longer compute the vectors either, so restoring any of it means a fresh
-`npm run data` against the API rather than a re-render. Git has the lot.
+are gone, and with them 71% of the page. The builds no longer compute the
+vectors either, so restoring any of it means a fresh `npm run data` against the
+API rather than a re-render. Git has the lot.
+
+What the page does carry per name is six annualised returns and six
+volatilities — every skip against every lookback — because the reader moves both
+edges of the window at runtime and neither can be derived from the other.
 
 # ETF universe
 

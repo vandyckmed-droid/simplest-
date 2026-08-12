@@ -11,7 +11,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dailyAdjusted, pooled } from './fmp.js';
-import { score } from './momentum.js';
+import { blendAt, DEFAULT_SKIP, score } from './momentum.js';
 import { ETF_THEMES, ETF_TICKERS, ETF_UNIVERSE } from './etf-universe.js';
 
 const MIN_BARS = 253;
@@ -67,15 +67,9 @@ async function main() {
       name: entry.label,
       theme: entry.themes[0],
       themes: entry.themes,
-      composite: metrics.composite,
-      score12_1: metrics.score12_1,
-      score6_1: metrics.score6_1,
-      annRet: (metrics.annRet12_1 + metrics.annRet6_1) / 2,
-      annVol: (metrics.vol12 + metrics.vol6) / 2,
-      annRet12_1: metrics.annRet12_1,
-      annRet6_1: metrics.annRet6_1,
-      vol12: metrics.vol12,
-      vol6: metrics.vol6,
+      rt: metrics.rt,
+      vl: metrics.vl,
+      composite: blendAt(metrics.rt, metrics.vl, DEFAULT_SKIP),
       medianDollarVolume: metrics.medianDollarVolume,
       lastDate: metrics.lastDate,
     };
@@ -103,7 +97,7 @@ async function main() {
     generatedAt: new Date().toISOString(),
     asOf,
     method: {
-      score: 'identical to the stock universe: mean of the 12-1 and 6-1 volatility-adjusted momentum scores',
+      score: 'identical to the stock universe, at every skip x lookback combination',
       universe: 'curated thematic ETF list from src/etf-universe.js; no screener step and no market-cap floor',
     },
     themes,
@@ -115,11 +109,12 @@ async function main() {
 
   console.log(`\n${funds.length}/${ETF_TICKERS.length} funds scored, as of ${asOf}`);
   if (dropped.length) console.log(`dropped:\n  ${dropped.join('\n  ')}`);
+  const meanAt = (a) => (a[DEFAULT_SKIP * 2] + a[DEFAULT_SKIP * 2 + 1]) / 2;
   console.log('\nTop 12:');
   for (const f of funds.slice(0, 12)) {
     console.log(
       `  ${String(f.rank).padStart(3)}  ${f.symbol.padEnd(5)} ${f.composite.toFixed(2).padStart(6)}  ` +
-      `vol ${(f.annVol * 100).toFixed(0).padStart(3)}%  ${f.name}`,
+      `vol ${(meanAt(f.vl) * 100).toFixed(0).padStart(3)}%  ${f.name}`,
     );
   }
 }

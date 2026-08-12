@@ -5,7 +5,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dailyAdjusted, pooled, screener } from './fmp.js';
-import { score } from './momentum.js';
+import { blendAt, DEFAULT_SKIP, score } from './momentum.js';
 import { clean } from './universe.js';
 
 const MIN_PRICE = 5;
@@ -80,20 +80,14 @@ async function main() {
       exchange: row.exchangeShortName,
       marketCap: row.marketCap,
       price: row.price,
-      // The blend ranks; ret and vol are averaged across the same two windows
-      // so all three numbers on a row describe one thing.
-      composite: metrics.composite,
-      score12_1: metrics.score12_1,
-      score6_1: metrics.score6_1,
-      annRet: (metrics.annRet12_1 + metrics.annRet6_1) / 2,
-      annVol: (metrics.vol12 + metrics.vol6) / 2,
-      // Per-window figures too, so switching the displayed metric switches
-      // score, return and volatility together rather than leaving two of the
-      // three describing a different window.
-      annRet12_1: metrics.annRet12_1,
-      annRet6_1: metrics.annRet6_1,
-      vol12: metrics.vol12,
-      vol6: metrics.vol6,
+      // Annualised return and volatility at every skip x lookback, flattened
+      // skip-major; the page derives score and blend from them.
+      rt: metrics.rt,
+      vl: metrics.vl,
+      // The stored rank is the conventional definition — 12-1 and 6-1 blended,
+      // one month skipped. The page re-ranks positionally when either edge of
+      // the window moves.
+      composite: blendAt(metrics.rt, metrics.vl, DEFAULT_SKIP),
       lastDate: metrics.lastDate,
     };
   };
@@ -124,9 +118,9 @@ async function main() {
       note: 'common stock only; preferreds, warrants, units and rights removed; one line per company (most liquid share class); foreign cross-listings excluded',
     },
     method: {
-      score: 'mean of the 12-1 and 6-1 volatility-adjusted momentum scores; each = annualised log return over the window / annualised daily-return volatility over the same window',
-      ret: 'mean of the two windows\' annualised log returns',
-      vol: 'mean of the two windows\' annualised volatilities',
+      score: 'annualised log return over a window / annualised daily-return volatility over the same window; the blend is the mean of the 12-month and 6-month scores',
+      windows: 'rt and vl are flattened skip-major over skips [0, 10, 21] trading days x lookbacks [252, 126]; index = skip * 2 + lookback',
+      composite: 'the blend at the conventional one-month skip, which the stored rank sorts on',
     },
     sectors: [...sectors].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
     stocks,
@@ -137,11 +131,13 @@ async function main() {
 
   console.log(`\n${stocks.length} tradeable names, as of ${asOf}`);
   for (const { name, count } of payload.sectors) console.log(`  ${String(count).padStart(4)}  ${name}`);
+  // blended over the two lookbacks at the conventional skip, for the log only
+  const meanAt = (a) => (a[DEFAULT_SKIP * 2] + a[DEFAULT_SKIP * 2 + 1]) / 2;
   console.log('\nTop 15:');
   for (const s of stocks.slice(0, 15)) {
     console.log(
       `  ${String(s.rank).padStart(4)}  ${s.symbol.padEnd(6)} ${s.composite.toFixed(2).padStart(6)}  ` +
-      `ret ${(s.annRet * 100).toFixed(1).padStart(7)}%  vol ${(s.annVol * 100).toFixed(1).padStart(6)}%  ${s.name}`,
+      `ret ${(meanAt(s.rt) * 100).toFixed(1).padStart(7)}%  vol ${(meanAt(s.vl) * 100).toFixed(1).padStart(6)}%  ${s.name}`,
     );
   }
 }

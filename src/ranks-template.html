@@ -559,11 +559,18 @@
       <button type="button" data-display="cash" aria-pressed="false" title="Cash needed per holding in a $10,000 portfolio">Cash</button>
     </div>
 
-    <h2>Metric</h2>
-    <div class="choice" role="group" aria-label="Metric">
+    <h2>Window</h2>
+    <div class="choice" role="group" aria-label="Window start">
       <button type="button" data-metric="0" aria-pressed="true">Blend</button>
-      <button type="button" data-metric="1" aria-pressed="false">12-1</button>
-      <button type="button" data-metric="2" aria-pressed="false">6-1</button>
+      <button type="button" data-metric="1" aria-pressed="false">12 mo</button>
+      <button type="button" data-metric="2" aria-pressed="false">6 mo</button>
+    </div>
+
+    <h2>Skip</h2>
+    <div class="choice" role="group" aria-label="Skip">
+      <button type="button" data-skip="0" aria-pressed="false" title="No skip: the window runs to the latest close">0%</button>
+      <button type="button" data-skip="1" aria-pressed="false" title="10 trading days, about half a month">50%</button>
+      <button type="button" data-skip="2" aria-pressed="true" title="21 trading days, one trading month — the conventional 12-1 / 6-1 definition">100%</button>
     </div>
 
     <h2 id="cap-head">Market cap</h2>
@@ -663,11 +670,38 @@
     return base;
   }
 
-  // 0 = blend, 1 = 12-1, 2 = 6-1; the switch moves score, ret and vol together.
-  const METRICS = ["Blend", "12-1", "6-1"];
-  const sc = (s) => s.sc[state.metric];
-  const rt = (s) => s.rt[state.metric];
-  const vl = (s) => s.vl[state.metric];
+  /* A window is two edges. **Window** picks where it opens — 12 months back, 6
+     months back, or the blend of both — and **Skip** picks how far short of
+     today it closes. Every name ships annualised return and volatility at each
+     combination, flattened skip-major; score and blend are derived here.
+
+     The skip is the "-1" in 12-1: standard practice, because the last few weeks
+     of a stock's return tend to mean-revert and would otherwise mix a reversal
+     signal into a momentum one. It is worth being able to switch off. GDX ranks
+     81st of 89 on a window that closed a month ago and is up 23% since — a fact
+     about the measurement, not about the fund. */
+  const METRICS = ["Blend", "12 mo", "6 mo"];
+  const SKIPS = ["0%", "50%", "100%"];
+  const SKIP_DAYS = [0, 10, 21];
+
+  // metric 1 = the 12-month lookback, 2 = the 6-month one, 0 = their mean
+  const pick = (a) => {
+    const base = state.skip * 2;
+    if (state.metric === 1) return a[base];
+    if (state.metric === 2) return a[base + 1];
+    return (a[base] + a[base + 1]) / 2;
+  };
+  const rt = (s) => pick(s.rt);
+  const vl = (s) => pick(s.vl);
+  // Score is a return over a volatility, so it is a division rather than a
+  // third shipped array. The blend averages the two lookbacks' scores — not
+  // their returns over their volatilities, which is a different number.
+  const sc = (s) => {
+    const base = state.skip * 2;
+    if (state.metric === 1) return s.rt[base] / s.vl[base];
+    if (state.metric === 2) return s.rt[base + 1] / s.vl[base + 1];
+    return (s.rt[base] / s.vl[base] + s.rt[base + 1] / s.vl[base + 1]) / 2;
+  };
 
   /* ---------- a universe is everything derived from one item list ----------
      Switching between stocks and funds swaps this whole object, so nothing
@@ -704,7 +738,7 @@
   /* ---------- state ---------- */
   const state = {
     view: "ranks", sort: "score", desc: true, q: "", sector: "",
-    metric: 0, cap: 0, universe: "stocks", weight: "iv", display: "pct",
+    metric: 0, skip: 2, cap: 0, universe: "stocks", weight: "iv", display: "pct",
     peek: null,
   };
 
@@ -713,6 +747,8 @@
   try {
     const saved = JSON.parse(localStorage.getItem(FILTER_KEY) ?? "{}");
     if (saved.cap === 500) state.cap = 500;
+    if (saved.skip === 0 || saved.skip === 1) state.skip = saved.skip;
+    if (saved.metric === 1 || saved.metric === 2) state.metric = saved.metric;
     if (saved.universe && UNIVERSES[saved.universe]) state.universe = saved.universe;
     if (saved.weight === "hrp") state.weight = "iv"; // the setting it replaced
     else if (WEIGHTS.includes(saved.weight)) state.weight = saved.weight;
@@ -722,7 +758,8 @@
   function saveFilters() {
     try {
       localStorage.setItem(FILTER_KEY, JSON.stringify({
-        cap: state.cap, universe: state.universe, weight: state.weight, display: state.display,
+        cap: state.cap, universe: state.universe, weight: state.weight,
+        display: state.display, metric: state.metric, skip: state.skip,
       }));
     } catch {}
   }
@@ -769,7 +806,7 @@
     if (state.weight === "eq") return rows.map((s) => ({ s, w: 1 / n }));
     // Sizing uses the blended volatility — the displayed metric changes what
     // you are reading, not how the basket is built.
-    const inv = rows.map((s) => 1 / Math.max(s.vl[0], 1e-6));
+    const inv = rows.map((s) => 1 / Math.max(vl(s), 1e-6));
     const total = inv.reduce((a, b) => a + b, 0);
     return rows.map((s, i) => ({ s, w: inv[i] / total }));
   }
@@ -802,7 +839,11 @@
   });
 
   for (const b of document.querySelectorAll("[data-metric]")) {
-    b.addEventListener("click", () => { state.metric = +b.dataset.metric; render(); });
+    b.addEventListener("click", () => { state.metric = +b.dataset.metric; saveFilters(); render(); });
+  }
+
+  for (const b of document.querySelectorAll("[data-skip]")) {
+    b.addEventListener("click", () => { state.skip = +b.dataset.skip; saveFilters(); render(); });
   }
 
   for (const b of document.querySelectorAll("[data-sort]")) {
@@ -940,6 +981,12 @@
       tag.textContent = "TOP " + state.cap;
       asof.append(tag);
     }
+    if (state.skip !== 2) {
+      const tag = document.createElement("em");
+      tag.textContent = "SKIP " + SKIPS[state.skip];
+      tag.title = SKIP_DAYS[state.skip] + " trading days skipped";
+      asof.append(tag);
+    }
     asof.append(U.asOf);
 
     const list = document.getElementById("list");
@@ -1000,7 +1047,7 @@
     for (let i = 1; i < w.length; i++) if (w[i].w > w[top].w) top = i;
 
     const avgScore = rows.reduce((t, s) => t + sc(s), 0) / rows.length;
-    const wVol = w.reduce((t, x) => t + x.w * x.s.vl[0], 0);
+    const wVol = w.reduce((t, x) => t + x.w * vl(x.s), 0);
     const line = (k, v) => {
       const row = document.createElement("div");
       row.className = "sum-row";
@@ -1071,13 +1118,13 @@
   const rankCache = new Map();
 
   function stockRanks() {
-    if (rankCache.has(state.metric)) return rankCache.get(state.metric);
+    const key = state.metric + ":" + state.skip;
+    if (rankCache.has(key)) return rankCache.get(key);
     const items = UNIVERSES.stocks.items;
-    const order = items.map((_, i) => i)
-      .sort((a, b) => items[b].sc[state.metric] - items[a].sc[state.metric]);
+    const order = items.map((_, i) => i).sort((a, b) => sc(items[b]) - sc(items[a]));
     const rank = new Int32Array(items.length);
     order.forEach((idx, i) => { rank[idx] = i + 1; });
-    rankCache.set(state.metric, rank);
+    rankCache.set(key, rank);
     return rank;
   }
 
@@ -1220,6 +1267,9 @@
 
     for (const b of document.querySelectorAll("[data-metric]")) {
       b.setAttribute("aria-pressed", String(+b.dataset.metric === state.metric));
+    }
+    for (const b of document.querySelectorAll("[data-skip]")) {
+      b.setAttribute("aria-pressed", String(+b.dataset.skip === state.skip));
     }
     document.getElementById("h-score").textContent = METRICS[state.metric];
 

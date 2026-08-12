@@ -1,22 +1,37 @@
 // Volatility-adjusted momentum on daily adjusted closes.
 //
-// Both horizons skip the most recent month (the "-1" in 12-1 / 6-1), which is
-// the standard way to sidestep short-term reversal contaminating the momentum
-// signal.
+// A window is defined by two edges: how far back it opens (the **lookback**)
+// and how far short of today it closes (the **skip**). Both are settings on the
+// page, so every name is measured at each combination and ships all of them.
+//
+// The skip is the "-1" in 12-1 / 6-1: the standard way to keep short-term
+// reversal out of a momentum signal, since the last few weeks of a stock's
+// return tend to mean-revert. It is worth being able to switch off — a name can
+// rank badly on a window that ends a month ago while having turned since, which
+// is a fact about the measurement rather than about the name.
 
 export const TRADING_DAYS_PER_YEAR = 252;
-export const SKIP_DAYS = 21;   // ~1 month, the gap that is excluded
-export const LOOKBACK_12 = 252; // ~12 months
-export const LOOKBACK_6 = 126;  // ~6 months
+
+/** Window openings, longest first: ~12 months and ~6 months. */
+export const LOOKBACKS = [252, 126];
+
+/** Window closings, as 0% / 50% / 100% of a trading month. */
+export const SKIPS = [0, 10, 21];
+
+/** 100% — one full month skipped, the conventional momentum definition. */
+export const DEFAULT_SKIP = 2;
+
+/** Where `[skip][lookback]` sits in the flat arrays `score` returns. */
+export const at = (skip, lookback) => skip * LOOKBACKS.length + lookback;
 
 /**
  * @param {number[]} closes Adjusted closes, oldest first.
  * @param {number} lookback Bars back from today where the window opens.
- * @returns {{logReturn:number, annVol:number, sharpe:number}|null}
+ * @param {number} skip Bars short of today where it closes.
  */
-function window(closes, lookback) {
+function measure(closes, lookback, skip) {
   const n = closes.length;
-  const end = n - 1 - SKIP_DAYS; // index of the window's last close
+  const end = n - 1 - skip; // index of the window's last close
   const start = n - 1 - lookback; // index of the window's first close
   if (start < 0 || end <= start) return null;
 
@@ -41,46 +56,56 @@ function window(closes, lookback) {
   const annVol = Math.sqrt(variance) * Math.sqrt(TRADING_DAYS_PER_YEAR);
   if (!(annVol > 0)) return null;
 
-  // Annualise the window return so the two horizons are on one scale, then
+  // Annualise the window return so every combination is on one scale, then
   // divide by annualised volatility: a Sharpe-like, unitless momentum score.
   const years = daily.length / TRADING_DAYS_PER_YEAR;
-  const annReturn = logReturn / years;
-
-  return { logReturn, annReturn, annVol, sharpe: annReturn / annVol };
+  return { annReturn: logReturn / years, annVol };
 }
 
 /**
+ * Annualised return and volatility at every skip × lookback, flattened
+ * skip-major. The score is `annReturn / annVol` and the blend is the mean of
+ * the two lookbacks' scores, both derived rather than stored — the page needs
+ * them per combination and a division is cheaper to ship than a third array.
+ *
  * @param {{date:string, close:number, volume:number}[]} bars Oldest first.
  */
 export function score(bars) {
   const closes = bars.map((b) => b.close);
-  const w12 = window(closes, LOOKBACK_12);
-  const w6 = window(closes, LOOKBACK_6);
-  if (!w12 || !w6) return null;
+  const rt = [];
+  const vl = [];
+  for (const skip of SKIPS) {
+    for (const lookback of LOOKBACKS) {
+      const w = measure(closes, lookback, skip);
+      if (!w) return null;
+      rt.push(w.annReturn);
+      vl.push(w.annVol);
+    }
+  }
 
   // Median dollar volume over the last quarter — a liquidity check that is not
   // thrown off by one earnings-day volume spike.
-  const recent = bars.slice(-63);
-  const dollarVolumes = recent
+  const dollarVolumes = bars
+    .slice(-63)
     .map((b) => b.close * b.volume)
     .filter((v) => Number.isFinite(v) && v > 0)
     .sort((a, b) => a - b);
-  const medianDollarVolume = dollarVolumes.length
-    ? dollarVolumes[Math.floor(dollarVolumes.length / 2)]
-    : 0;
 
   return {
-    ret12_1: w12.logReturn,
-    ret6_1: w6.logReturn,
-    annRet12_1: w12.annReturn,
-    annRet6_1: w6.annReturn,
-    vol12: w12.annVol,
-    vol6: w6.annVol,
-    score12_1: w12.sharpe,
-    score6_1: w6.sharpe,
-    composite: (w12.sharpe + w6.sharpe) / 2,
-    medianDollarVolume,
+    rt,
+    vl,
+    medianDollarVolume: dollarVolumes.length ? dollarVolumes[Math.floor(dollarVolumes.length / 2)] : 0,
     bars: bars.length,
     lastDate: bars[bars.length - 1].date,
   };
+}
+
+/** Blend score at one skip: the mean of the two lookbacks' scores. */
+export function blendAt(rt, vl, skip) {
+  let total = 0;
+  for (let i = 0; i < LOOKBACKS.length; i++) {
+    const k = at(skip, i);
+    total += rt[k] / vl[k];
+  }
+  return total / LOOKBACKS.length;
 }

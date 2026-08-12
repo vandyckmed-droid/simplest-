@@ -101,12 +101,13 @@ for (const symbol of Object.keys(ETF_HOLDINGS)) {
   }
 }
 
-// [blend, 12-1, 6-1] for each of score, return and volatility, so the metric
-// switch moves all three columns together.
-const triples = (s) => ({
-  sc: [round(s.composite, 2), round(s.score12_1, 2), round(s.score6_1, 2)],
-  rt: [round(s.annRet, 3), round(s.annRet12_1, 3), round(s.annRet6_1, 3)],
-  vl: [round(s.annVol, 3), round(s.vol12, 3), round(s.vol6, 3)],
+// Annualised return and volatility at every skip x lookback, flattened
+// skip-major over skips [0, 10, 21] and lookbacks [252, 126]. The page derives
+// score = rt/vl and blend = mean of the two lookbacks' scores, so a third array
+// would just be a division it can do itself.
+const windows = (s) => ({
+  rt: s.rt.map((v) => round(v, 3)),
+  vl: s.vl.map((v) => round(v, 3)),
 });
 
 // Both universes ship in one page. Each carries its own grouping — sectors for
@@ -128,7 +129,7 @@ const compact = {
         name: tidyName(s.name, s.symbol),
         k: sectorIndex.get(s.sector) ?? 0,
         m: Math.round(s.marketCap / 1e6), // $M; the page ranks on it for the cap filter
-        ...triples(s),
+        ...windows(s),
       })),
     },
     etfs: {
@@ -143,7 +144,7 @@ const compact = {
         symbol: f.symbol,
         name: f.name, // the theme label, not the fund's legal name
         k: themeIndex.get(f.theme) ?? 0,
-        ...triples(f),
+        ...windows(f),
         h: holdingsFor(f.symbol), // [symbol, weight %, stock index or -1]
       })),
     },
