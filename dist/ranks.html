@@ -108,11 +108,36 @@
     letter-spacing: -.03em;
   }
 
-  .title span {
-    font-size: 10.5px;
+  /* One run of grey read as a single string. Split it: the count is a figure,
+     the date is a caption beneath it. */
+  .meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    white-space: nowrap;
+  }
+
+  .meta b {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+
+  .meta i {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-style: normal;
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
     font-variant-numeric: tabular-nums;
     color: var(--muted);
-    white-space: nowrap;
   }
 
   .filters {
@@ -402,7 +427,7 @@
   }
 
   /* an active filter has to be visible from the list, not only from its tab */
-  .title em {
+  .meta em {
     font-style: normal;
     font-weight: 600;
     font-size: 9.5px;
@@ -487,7 +512,7 @@
   <header class="top">
     <div class="title">
       <h1 id="heading">Ranks</h1>
-      <span id="asof"></span>
+      <span class="meta" id="meta" hidden><b id="count-n"></b><i id="asof"></i></span>
     </div>
 
     <div class="filters" id="filters">
@@ -855,6 +880,8 @@
 
   function renderRanks() {
     const rows = selected();
+    document.getElementById("meta").hidden = false;
+    document.getElementById("count-n").textContent = rows.length.toLocaleString();
     const asof = document.getElementById("asof");
     asof.textContent = "";
     if (state.cap) {
@@ -862,7 +889,7 @@
       tag.textContent = "TOP " + state.cap;
       asof.append(tag);
     }
-    asof.append(rows.length.toLocaleString() + " · " + DATA.asOf);
+    asof.append(DATA.asOf);
 
     const list = document.getElementById("list");
     list.textContent = "";
@@ -890,7 +917,9 @@
 
   function renderBasket() {
     const held = stocks.filter((s) => picked.has(s.symbol));
-    document.getElementById("asof").textContent = held.length ? held.length + " names" : "";
+    document.getElementById("meta").hidden = !held.length;
+    document.getElementById("count-n").textContent = held.length;
+    document.getElementById("asof").textContent = held.length === 1 ? "name" : "names";
 
     const sum = document.getElementById("sum");
     const list = document.getElementById("list");
@@ -950,7 +979,7 @@
   }
 
   function renderFilters() {
-    document.getElementById("asof").textContent = "";
+    document.getElementById("meta").hidden = true;
     document.getElementById("cap-note").textContent = state.cap
       ? `Showing the ${state.cap} largest, ${fmtCap(capCutoffValue(state.cap))} and up — ${(N - state.cap).toLocaleString()} smaller names hidden. Scores are unchanged; ranks renumber.`
       : `All ${N.toLocaleString()} names, down to ${fmtCap(capCutoffValue(N))}.`;
