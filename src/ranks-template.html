@@ -506,6 +506,12 @@
   </header>
 
   <div class="fgroup" id="settings-panel" hidden>
+    <h2>Universe</h2>
+    <div class="choice" role="group" aria-label="Universe">
+      <button type="button" data-universe="stocks" aria-pressed="true">Stocks</button>
+      <button type="button" data-universe="etfs" aria-pressed="false">ETFs</button>
+    </div>
+
     <h2>Metric</h2>
     <div class="choice" role="group" aria-label="Metric">
       <button type="button" data-metric="0" aria-pressed="true">Blend</button>
@@ -513,8 +519,8 @@
       <button type="button" data-metric="2" aria-pressed="false">6-1</button>
     </div>
 
-    <h2>Market cap</h2>
-    <div class="choice" role="group" aria-label="Market cap cutoff">
+    <h2 id="cap-head">Market cap</h2>
+    <div class="choice" id="cap-choice" role="group" aria-label="Market cap cutoff">
       <button type="button" data-cap="0" aria-pressed="true">All</button>
       <button type="button" data-cap="500" aria-pressed="false">Top 500</button>
     </div>
@@ -533,8 +539,7 @@
 <script>
   const DATA = __DATA__;
 
-  const SECTORS = DATA.sectors;
-  const ABBR = DATA.abbr;
+  const UNIVERSES = DATA.universes;
 
   /* One 12px line-drawing per sector, keyed by name so a rebuild reordering the
      sector list cannot shuffle them. Each picks the most literal object in that
@@ -553,6 +558,32 @@
     "Utilities":              "M6.9 1.6L3.2 6.9h2.5l-.6 3.5 4-5.4H6.4z",
   };
 
+  // The ETF list groups by theme, not sector. Ten themes map cleanly onto a
+  // sector mark; six needed drawing.
+  Object.assign(GLYPH, {
+    "Broad sectors":                                "M2.2 2.2h3.2v3.2H2.2z M6.6 2.2h3.2v3.2H6.6z M2.2 6.6h3.2v3.2H2.2z M6.6 6.6h3.2v3.2H6.6z",
+    "Technology and digital economy":               GLYPH["Technology"],
+    "Health care":                                  GLYPH["Healthcare"],
+    "Financials":                                   GLYPH["Financial Services"],
+    "Energy and power":                             GLYPH["Energy"],
+    "Metals, mining and materials":                 GLYPH["Basic Materials"],
+    "Industrials, manufacturing and infrastructure": GLYPH["Industrials"],
+    "Construction, housing and real estate":        GLYPH["Real Estate"],
+    "Consumer, retail and leisure":                 GLYPH["Consumer Cyclical"],
+    "Communication, media and entertainment":       GLYPH["Communication Services"],
+    "Clean energy and electrification":             GLYPH["Utilities"],
+    // sprout
+    "Agriculture and food":                         "M6 10.4V5.2 M6 5.6C6 3.7 7.4 2.2 9.5 2.1c.1 2-1.3 3.5-3.5 3.5z M6 7.1C6 5.6 4.8 4.4 3 4.3c-.1 1.6 1.1 2.8 3 2.8z",
+    // wave
+    "Water and environmental infrastructure":       "M1.5 4.4c1.1-1 2.2-1 3.3 0s2.2 1 3.3 0 2.2-1 2.4-.6 M1.5 7c1.1-1 2.2-1 3.3 0s2.2 1 3.3 0 2.2-1 2.4-.6 M1.5 9.6c1.1-1 2.2-1 3.3 0s2.2 1 3.3 0 2.2-1 2.4-.6",
+    // rocket
+    "Defense, aerospace and space":                 "M6 1.4c1.7 1.6 2.5 3.4 2.5 5.3L6 8.6 3.5 6.7c0-1.9.8-3.7 2.5-5.3z M3.5 6.3L2 8.1l1.6.5 M8.5 6.3L10 8.1l-1.6.5 M5.2 9.2h1.6",
+    // linked nodes
+    "Automation, AI and advanced manufacturing":    "M6 1.6a1.2 1.2 0 100 2.4 1.2 1.2 0 000-2.4z M2.6 8a1.2 1.2 0 100 2.4 1.2 1.2 0 000-2.4z M9.4 8a1.2 1.2 0 100 2.4 1.2 1.2 0 000-2.4z M5.2 4.2L3.4 7.8 M6.8 4.2l1.8 3.6 M3.9 9.2h4.2",
+    // mountains
+    "Natural resources":                            "M1.3 9.6l3.1-5.2 2 3.3 M4.6 9.6l3-5.6 3.1 5.6z",
+  });
+
   function glyphFor(sector) {
     const d = GLYPH[sector];
     if (!d) return null;
@@ -567,8 +598,6 @@
     svg.append(t);
     return svg;
   }
-  const stocks = DATA.stocks.map((s, i) => ({ ...s, i, sector: SECTORS[s.k] }));
-  const N = stocks.length;
   const T = 52; // weekly returns per correlation vector
 
   const CORR_FLAG = 0.60;
@@ -585,17 +614,19 @@
   const vl = (s) => s.vl[state.metric];
 
   /* ---------- correlation vectors ----------
-     Each stock ships 52 standardised weekly log returns as int8. Re-centre and
+     Every item ships 52 standardised weekly log returns as int8. Re-centre and
      re-normalise on decode and the dot product of two vectors is exactly their
-     correlation. */
-  const VEC = new Float32Array(N * T);
-  {
+     correlation. Both universes use the identical encoding, so one decoder
+     serves both. */
+  function decodeVectors(items) {
+    const N = items.length;
+    const VEC = new Float32Array(N * T);
     const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     const idx = new Uint8Array(128);
     for (let i = 0; i < 64; i++) idx[B64.charCodeAt(i)] = i;
 
     for (let s = 0; s < N; s++) {
-      const str = DATA.stocks[s].c;
+      const str = items[s].c;
       const off = s * T;
       let out = 0;
       for (let i = 0; i + 3 < str.length && out < T; i += 4) {
@@ -613,74 +644,117 @@
       const norm = Math.sqrt(ss) || 1;
       for (let t = 0; t < T; t++) VEC[off + t] /= norm;
     }
+    return VEC;
   }
 
   function rho(a, b) {
     const oa = a * T, ob = b * T;
     let d = 0;
-    for (let t = 0; t < T; t++) d += VEC[oa + t] * VEC[ob + t];
+    for (let t = 0; t < T; t++) d += U.vec[oa + t] * U.vec[ob + t];
     return d;
   }
 
-  /* ---------- market-cap ranking ----------
-     "Top 500 largest" is a rank, not a dollar line: an absolute threshold
-     drifts as the market moves, a rank does not. */
-  const capRank = new Int32Array(N);
-  {
-    const order = stocks.map((s) => s.i).sort((a, b) => stocks[b].m - stocks[a].m);
-    order.forEach((idx, i) => { capRank[idx] = i + 1; });
+  /* ---------- a universe is everything derived from one item list ----------
+     Switching between stocks and funds swaps this whole object, so nothing
+     downstream has to know which one it is holding. */
+  function buildUniverse(key) {
+    const src = UNIVERSES[key];
+    const items = src.items.map((it, i) => ({ ...it, i, group: src.groups[it.k] }));
+    const N = items.length;
+
+    // "Top 500 largest" is a rank, not a dollar line: an absolute threshold
+    // drifts as the market moves, a rank does not. Funds have no capitalisation,
+    // so they get no ranking and the setting hides itself.
+    let capRank = null;
+    if (src.hasCap) {
+      capRank = new Int32Array(N);
+      items.map((it) => it.i).sort((a, b) => items[b].m - items[a].m)
+        .forEach((idx, i) => { capRank[idx] = i + 1; });
+    }
+
+    const picked = new Set();
+    try {
+      for (const t of JSON.parse(localStorage.getItem(`ranks-basket-${key}`) ?? "[]")) picked.add(t);
+    } catch {}
+
+    return {
+      key, items, N, picked, capRank,
+      label: src.label,
+      groupLabel: src.groupLabel,
+      groups: src.groups,
+      hasCap: src.hasCap,
+      asOf: src.asOf ?? DATA.asOf,
+      vec: decodeVectors(src.items),
+      // Highest correlation between each item and anything currently held, kept
+      // as an array so rows can be flagged without recomputing per render.
+      maxRho: new Float32Array(N),
+      maxWith: new Int32Array(N),
+      share: new Map(),
+    };
   }
   /* ---------- state ---------- */
-  const WL_KEY = "ranks-basket";
-  const picked = new Set();
-  try {
-    for (const t of JSON.parse(localStorage.getItem(WL_KEY) ?? "[]")) picked.add(t);
-  } catch {}
-
-  const state = { view: "ranks", sort: "score", desc: true, q: "", sector: "", metric: 0, cap: 0 };
+  const state = {
+    view: "ranks", sort: "score", desc: true, q: "", sector: "",
+    metric: 0, cap: 0, universe: "stocks",
+  };
 
   const FILTER_KEY = "ranks-filters";
   try {
     const saved = JSON.parse(localStorage.getItem(FILTER_KEY) ?? "{}");
     if (saved.cap === 500) state.cap = 500;
+    if (saved.universe && UNIVERSES[saved.universe]) state.universe = saved.universe;
   } catch {}
 
   function saveFilters() {
-    try { localStorage.setItem(FILTER_KEY, JSON.stringify({ cap: state.cap })); } catch {}
+    try {
+      localStorage.setItem(FILTER_KEY, JSON.stringify({ cap: state.cap, universe: state.universe }));
+    } catch {}
   }
 
-  // Highest correlation between each stock and anything currently held. Kept as
-  // an array so rows can be flagged without recomputing per render.
-  const maxRho = new Float32Array(N);
-  const maxWith = new Int32Array(N);
+  let U = buildUniverse(state.universe);
 
-  // Share of the basket already sitting in each sector.
-  let sectorShare = new Map();
+  function setUniverse(key) {
+    if (key === state.universe) return;
+    state.universe = key;
+    U = buildUniverse(key);
+    // A sector name is not a theme name; carrying the old selection across would
+    // silently match nothing.
+    state.sector = "";
+    fillSectors();
+    saveFilters();
+    recomputeCorr();
+    recomputeSectors();
+    shown = PAGE;
+    render();
+  }
 
+  const held = () => U.items.filter((it) => U.picked.has(it.symbol));
+
+  /** Share of the basket already sitting in each group. */
   function recomputeSectors() {
-    sectorShare = new Map();
-    const held = stocks.filter((s) => picked.has(s.symbol));
-    if (held.length < SECTOR_MIN) return;
+    U.share = new Map();
+    const h = held();
+    if (h.length < SECTOR_MIN) return;
     const counts = new Map();
-    for (const s of held) counts.set(s.k, (counts.get(s.k) ?? 0) + 1);
+    for (const it of h) counts.set(it.k, (counts.get(it.k) ?? 0) + 1);
     for (const [k, n] of counts) {
-      if (n >= SECTOR_MIN && n / held.length >= SECTOR_FLAG) sectorShare.set(k, n / held.length);
+      if (n >= SECTOR_MIN && n / h.length >= SECTOR_FLAG) U.share.set(k, n / h.length);
     }
   }
 
   function recomputeCorr() {
-    maxRho.fill(-2);
-    maxWith.fill(-1);
-    const held = stocks.filter((s) => picked.has(s.symbol));
-    if (!held.length) return;
-    for (let i = 0; i < N; i++) {
-      const self = picked.has(stocks[i].symbol);
-      for (const h of held) {
-        if (h.i === i) continue;
-        const r = rho(i, h.i);
-        if (r > maxRho[i]) { maxRho[i] = r; maxWith[i] = h.i; }
+    U.maxRho.fill(-2);
+    U.maxWith.fill(-1);
+    const h = held();
+    if (!h.length) return;
+    for (let i = 0; i < U.N; i++) {
+      const self = U.picked.has(U.items[i].symbol);
+      for (const x of h) {
+        if (x.i === i) continue;
+        const r = rho(i, x.i);
+        if (r > U.maxRho[i]) { U.maxRho[i] = r; U.maxWith[i] = x.i; }
       }
-      if (self && maxWith[i] === -1) maxRho[i] = -2;
+      if (self && U.maxWith[i] === -1) U.maxRho[i] = -2;
     }
   }
 
@@ -689,12 +763,12 @@
   const sign = (v) => (v >= 0 ? "pos" : "neg");
 
   function save() {
-    try { localStorage.setItem(WL_KEY, JSON.stringify([...picked])); } catch {}
+    try { localStorage.setItem(`ranks-basket-${U.key}`, JSON.stringify([...U.picked])); } catch {}
   }
 
   function toggle(symbol) {
-    if (picked.has(symbol)) picked.delete(symbol);
-    else picked.add(symbol);
+    if (U.picked.has(symbol)) U.picked.delete(symbol);
+    else U.picked.add(symbol);
     save();
     recomputeCorr();
     recomputeSectors();
@@ -712,19 +786,23 @@
 
   /* ---------- controls ---------- */
   const sectorSel = document.getElementById("sector");
-  {
+
+  function fillSectors() {
+    sectorSel.textContent = "";
     const all = document.createElement("option");
     all.value = "";
-    all.textContent = "All sectors";
+    all.textContent = U.groupLabel;
     sectorSel.append(all);
-    for (const name of SECTORS) {
+    for (const name of U.groups) {
       const o = document.createElement("option");
       o.value = name;
       o.textContent = name;
       sectorSel.append(o);
     }
+    sectorSel.value = state.sector;
   }
-  sectorSel.addEventListener("change", () => { state.sector = sectorSel.value; render(); });
+  fillSectors();
+  sectorSel.addEventListener("change", () => { state.sector = sectorSel.value; shown = PAGE; render(); });
 
   let timer;
   document.getElementById("q").addEventListener("input", (e) => {
@@ -747,6 +825,10 @@
     });
   }
 
+  for (const b of document.querySelectorAll("[data-universe]")) {
+    b.addEventListener("click", () => setUniverse(b.dataset.universe));
+  }
+
   for (const b of document.querySelectorAll("[data-cap]")) {
     b.addEventListener("click", () => { state.cap = +b.dataset.cap; saveFilters(); render(); });
   }
@@ -759,11 +841,11 @@
   let shown = PAGE;
 
   function selected() {
-    let out = stocks;
+    let out = U.items;
     // Filters only decide who is listed; scores are computed against the whole
     // universe and never move. The rank is positional, so it renumbers.
-    if (state.cap) out = out.filter((s) => capRank[s.i] <= state.cap);
-    if (state.sector) out = out.filter((s) => s.sector === state.sector);
+    if (state.cap && U.capRank) out = out.filter((s) => U.capRank[s.i] <= state.cap);
+    if (state.sector) out = out.filter((s) => s.group === state.sector);
     if (state.q) {
       out = out.filter((s) =>
         s.symbol.toLowerCase().includes(state.q) || s.name.toLowerCase().includes(state.q));
@@ -784,7 +866,7 @@
     const b = document.createElement("button");
     b.type = "button";
     b.className = "row " + (state.view === "basket" ? "grid-basket" : "grid");
-    b.setAttribute("aria-pressed", String(picked.has(s.symbol)));
+    b.setAttribute("aria-pressed", String(U.picked.has(s.symbol)));
 
     if (state.view !== "basket") {
       const rank = document.createElement("span");
@@ -800,29 +882,29 @@
 
     const sub = document.createElement("span");
     sub.className = "sub";
-    const mark = glyphFor(s.sector);
+    const mark = glyphFor(s.group);
     if (mark) sub.append(mark);
     const nm = document.createElement("i");
     nm.textContent = s.name;
     sub.append(nm);
 
-    if (maxRho[s.i] >= CORR_FLAG && maxWith[s.i] >= 0) {
-      const twin = stocks[maxWith[s.i]].symbol;
+    if (U.maxRho[s.i] >= CORR_FLAG && U.maxWith[s.i] >= 0) {
+      const twin = U.items[U.maxWith[s.i]].symbol;
       const em = document.createElement("em");
-      em.textContent = "≈" + maxRho[s.i].toFixed(2).slice(1) + " " + twin;
-      em.title = `correlation ${maxRho[s.i].toFixed(2)} with ${twin}`;
-      em.setAttribute("aria-label", `correlated ${maxRho[s.i].toFixed(2)} with ${twin}`);
+      em.textContent = "≈" + U.maxRho[s.i].toFixed(2).slice(1) + " " + twin;
+      em.title = `correlation ${U.maxRho[s.i].toFixed(2)} with ${twin}`;
+      em.setAttribute("aria-label", `correlated ${U.maxRho[s.i].toFixed(2)} with ${twin}`);
       sub.append(em);
     }
 
-    const share = sectorShare.get(s.k);
+    const share = U.share.get(s.k);
     if (share !== undefined) {
       const pct = Math.round(share * 100) + "%";
       const dot = document.createElement("span");
       dot.className = "dot";
-      dot.title = `${pct} of the basket is already ${s.sector}`;
+      dot.title = `${pct} of the basket is already ${s.group}`;
       dot.setAttribute("role", "img");
-      dot.setAttribute("aria-label", `${pct} of the basket is already ${s.sector}`);
+      dot.setAttribute("aria-label", `${pct} of the basket is already ${s.group}`);
       sub.append(dot);
     }
     id.append(tkr, sub);
@@ -848,12 +930,12 @@
     document.getElementById("count-n").textContent = rows.length.toLocaleString();
     const asof = document.getElementById("asof");
     asof.textContent = "";
-    if (state.cap) {
+    if (state.cap && U.hasCap) {
       const tag = document.createElement("em");
       tag.textContent = "TOP " + state.cap;
       asof.append(tag);
     }
-    asof.append(DATA.asOf);
+    asof.append(U.asOf);
 
     const list = document.getElementById("list");
     list.textContent = "";
@@ -880,17 +962,17 @@
   }
 
   function renderBasket() {
-    const held = stocks.filter((s) => picked.has(s.symbol));
-    document.getElementById("meta").hidden = !held.length;
-    document.getElementById("count-n").textContent = held.length;
-    document.getElementById("asof").textContent = held.length === 1 ? "name" : "names";
+    const rows = held();
+    document.getElementById("meta").hidden = !rows.length;
+    document.getElementById("count-n").textContent = rows.length;
+    document.getElementById("asof").textContent = rows.length === 1 ? "name" : "names";
 
     const sum = document.getElementById("sum");
     const list = document.getElementById("list");
     sum.textContent = "";
     list.textContent = "";
 
-    if (!held.length) {
+    if (!rows.length) {
       sum.hidden = true;
       const p = document.createElement("p");
       p.className = "empty";
@@ -900,10 +982,10 @@
     }
     sum.hidden = false;
 
-    const w = weights(held);
+    const w = weights(rows);
     w.sort((a, b) => sc(b.s) - sc(a.s));
 
-    const avgScore = held.reduce((t, s) => t + sc(s), 0) / held.length;
+    const avgScore = rows.reduce((t, s) => t + sc(s), 0) / rows.length;
     const wVol = w.reduce((t, x) => t + x.w * x.s.vl[0], 0);
     const line = (k, v) => {
       const row = document.createElement("div");
@@ -920,7 +1002,7 @@
     line("Largest weight", fmtPct(Math.max(...w.map((x) => x.w))));
 
     const counts = new Map();
-    for (const s of held) counts.set(s.sector, (counts.get(s.sector) ?? 0) + 1);
+    for (const it of rows) counts.set(it.group, (counts.get(it.group) ?? 0) + 1);
     for (const [name, n] of [...counts].sort((a, b) => b[1] - a[1])) line(name, n);
 
     const head = document.createElement("div");
@@ -960,9 +1042,15 @@
     document.getElementById("tab-basket").setAttribute("aria-pressed", String(view === "basket"));
     document.getElementById("tab-settings").setAttribute("aria-pressed", String(view === "settings"));
 
+    for (const b of document.querySelectorAll("[data-universe]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.universe === state.universe));
+    }
     for (const b of document.querySelectorAll("[data-cap]")) {
       b.setAttribute("aria-pressed", String(+b.dataset.cap === state.cap));
     }
+    // A fund has assets, not a capitalisation — the cutoff has nothing to rank.
+    document.getElementById("cap-head").hidden = !U.hasCap;
+    document.getElementById("cap-choice").hidden = !U.hasCap;
 
     for (const b of document.querySelectorAll("[data-metric]")) {
       b.setAttribute("aria-pressed", String(+b.dataset.metric === state.metric));
@@ -976,7 +1064,7 @@
     }
 
     document.getElementById("tab-basket").textContent =
-      picked.size ? `Basket · ${picked.size}` : "Basket";
+      U.picked.size ? `Basket · ${U.picked.size}` : "Basket";
 
     if (view === "basket") renderBasket();
     else if (view === "settings") renderSettings();

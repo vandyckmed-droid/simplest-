@@ -59,44 +59,56 @@ function tidyName(name) {
 }
 
 const data = JSON.parse(await readFile(new URL('../data/ranks.json', import.meta.url), 'utf8'));
+const etfData = JSON.parse(await readFile(new URL('../data/etfs.json', import.meta.url), 'utf8'));
 
-// Sectors ship once as a list; each stock carries an index into it.
+// [blend, 12-1, 6-1] for each of score, return and volatility, so the metric
+// switch moves all three columns together.
+const triples = (s) => ({
+  sc: [round(s.composite, 2), round(s.score12_1, 2), round(s.score6_1, 2)],
+  rt: [round(s.annRet, 3), round(s.annRet12_1, 3), round(s.annRet6_1, 3)],
+  vl: [round(s.annVol, 3), round(s.vol12, 3), round(s.vol6, 3)],
+});
+
+// Both universes ship in one page. Each carries its own grouping — sectors for
+// stocks, themes for funds — and the page reads whichever is active.
 const sectors = data.sectors.map((s) => s.name);
 const sectorIndex = new Map(sectors.map((name, i) => [name, i]));
-
-// Sector abbreviations for the concentration flag; the label has to carry the
-// meaning on its own at 10px.
-const ABBR = {
-  'Technology': 'TECH',
-  'Communication Services': 'COMM',
-  'Healthcare': 'HLTH',
-  'Financial Services': 'FIN',
-  'Energy': 'ENRG',
-  'Consumer Cyclical': 'CYCL',
-  'Consumer Defensive': 'DFNS',
-  'Industrials': 'INDL',
-  'Basic Materials': 'MATL',
-  'Real Estate': 'RE',
-  'Utilities': 'UTIL',
-};
+const themeIndex = new Map(etfData.themes.map((name, i) => [name, i]));
 
 const compact = {
   asOf: data.asOf,
-  sectors,
-  abbr: sectors.map((name) => ABBR[name] ?? name.slice(0, 4).toUpperCase()),
-  // Only what the page renders. `c` is the base64 correlation vector.
-  stocks: data.stocks.map((s) => ({
-    symbol: s.symbol,
-    name: tidyName(s.name),
-    k: sectorIndex.get(s.sector) ?? 0,
-    m: Math.round(s.marketCap / 1e6), // $M; the page ranks on it for the cap filter
-    // [blend, 12-1, 6-1] for each of score, return and volatility, so the
-    // metric switch moves all three columns together.
-    sc: [round(s.composite, 2), round(s.score12_1, 2), round(s.score6_1, 2)],
-    rt: [round(s.annRet, 3), round(s.annRet12_1, 3), round(s.annRet6_1, 3)],
-    vl: [round(s.annVol, 3), round(s.vol12, 3), round(s.vol6, 3)],
-    c: s.corr,
-  })),
+  universes: {
+    stocks: {
+      label: 'Stocks',
+      groupLabel: 'All sectors',
+      groups: sectors,
+      hasCap: true,
+      items: data.stocks.map((s) => ({
+        symbol: s.symbol,
+        name: tidyName(s.name),
+        k: sectorIndex.get(s.sector) ?? 0,
+        m: Math.round(s.marketCap / 1e6), // $M; the page ranks on it for the cap filter
+        ...triples(s),
+        c: s.corr, // base64 correlation vector
+      })),
+    },
+    etfs: {
+      label: 'ETFs',
+      groupLabel: 'All themes',
+      groups: etfData.themes,
+      // A fund has assets, not a capitalisation, so the cap cutoff has no
+      // meaning here and the setting hides itself.
+      hasCap: false,
+      asOf: etfData.asOf,
+      items: etfData.funds.map((f) => ({
+        symbol: f.symbol,
+        name: f.name, // the theme label, not the fund's legal name
+        k: themeIndex.get(f.theme) ?? 0,
+        ...triples(f),
+        c: f.corr,
+      })),
+    },
+  },
 };
 
 const template = await readFile(new URL('ranks-template.html', import.meta.url), 'utf8');
@@ -107,4 +119,7 @@ const html = template.replace('__DATA__', () => json);
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
 await writeFile(new URL('../dist/ranks.html', import.meta.url), html);
 
-console.log(`dist/ranks.html — ${(html.length / 1024).toFixed(0)} KB, ${compact.stocks.length} stocks`);
+console.log(
+  `dist/ranks.html — ${(html.length / 1024).toFixed(0)} KB · ` +
+  `${compact.universes.stocks.items.length} stocks · ${compact.universes.etfs.items.length} funds`,
+);

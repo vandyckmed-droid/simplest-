@@ -8,10 +8,12 @@
     "build": "node src/build.js && node src/render.js",
     "data": "node src/build.js",
     "render": "node src/render.js",
-    "ranks": "node src/ranks-build.js && node src/ranks-render.js",
+    "ranks": "node src/ranks-build.js && node src/etf-build.js && node src/ranks-render.js",
     "ranks:data": "node src/ranks-build.js",
     "ranks:render": "node src/ranks-render.js",
-    "etf:check": "node src/etf-check.js"
+    "etf:check": "node src/etf-check.js",
+    "etf": "node src/etf-build.js && node src/ranks-render.js",
+    "etf:data": "node src/etf-build.js"
   },
   "engines": {
     "node": ">=20"

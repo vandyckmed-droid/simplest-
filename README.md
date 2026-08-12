@@ -213,11 +213,11 @@ src/ranks-render.js      inlines the JSON, writes dist/ranks.html
 
 ---
 
-# ETF universe (staged, not yet wired)
+# ETF universe
 
 `src/etf-universe.js` holds a thematic ETF list — **16 themes, 93 unique funds,
-120 listings** — for a planned Settings toggle that switches the Ranks list
-between single stocks and these funds. Nothing reads it yet.
+120 listings**. Settings › Universe switches the Ranks list between single
+stocks and these funds; `npm run ranks` builds both.
 
 It is stored as ordered groups rather than a flat ticker list because the
 grouping carries meaning: 24 funds sit under more than one theme (GRID is grid
@@ -226,17 +226,33 @@ miner and a battery-materials play), and the lens you arrive through changes
 what the fund is to you. `ETF_UNIVERSE` derives one entry per ticker, keeping
 every theme it belongs to plus any alternate label.
 
-## What the scoring side would need
+## How the two universes differ
 
-Nothing, for the maths — an ETF has adjusted closes like anything else, so
-`src/momentum.js` scores it unchanged. What needs replacing is the *universe*
-step: `src/universe.js` exists specifically to throw funds away.
+The maths is identical — a fund has adjusted closes like anything else, so
+`src/momentum.js` scores it unchanged and `src/etf-build.js` reuses it whole.
+Four things differ:
 
-Liquidity is the real difference. Median daily dollar volume across these funds
-runs from under $0.1M (NERD) to $6.5B (SMH), and the $25M floor governing the
-stock universe would delete 39 of the 89 scoreable funds — most of the thematic
-ones the list exists for. Survivors by floor: **$1M → 76, $5M → 62, $25M → 50**.
-ETF mode needs its own floor, near $1M.
+- **No screener step.** The curated list *is* the universe, so `src/universe.js`
+  (which exists to throw funds away) is not involved.
+- **No liquidity floor.** Median daily dollar volume runs from under $0.1M
+  (NERD) to $6.5B (SMH); the stock side's $25M would delete 39 of the 89
+  scoreable funds, including most of the thematic ones the list exists for. The
+  list is kept whole instead.
+- **No market cap.** A fund has assets, not a capitalisation, so the Top 500
+  cutoff has nothing to rank and hides itself in ETF mode.
+- **Themes, not sectors.** The group dropdown reads "All themes" and carries the
+  16 groups. Ten map onto an existing sector mark; six needed drawing — a grid
+  for broad sectors, a sprout, waves, a rocket, linked nodes, and mountains.
+
+Names come from the theme list rather than the fund's legal name: SMH is
+"Semiconductors", not "VanEck Semiconductor ETF".
+
+Baskets are **per universe**, in separate localStorage keys — switching to funds
+does not mix ETFs into a stock basket or empty it. The correlation and
+concentration flags work identically within each. Among funds they are blunt by
+nature: holding XLK, SMH and IGV flags 19 of 86, with AIQ≈XLK at 0.96,
+SKYY≈IGV at 0.93 and QTUM≈SMH at 0.91 — thematic tech funds overlap heavily,
+and the flag says so.
 
 ## Health of the list
 
