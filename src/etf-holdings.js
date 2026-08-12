@@ -81,6 +81,22 @@ export const ETF_HOLDINGS = {
     ],
   },
 
+  CIBR: {
+    asOf: '2026-08-10',
+    holdings: [
+      ['PANW', 9.74],
+      ['CRWD', 8.68],
+      ['FTNT', 8.39],
+      ['CSCO', 7.15],
+      ['AVGO', 6.66],
+      ['NET', 4.54],
+      ['OKTA', 3.49],
+      ['ZS', 3.46],
+      ['FFIV', 3.05],
+      ['RBRK', 2.90],
+    ],
+  },
+
   // A "residential and specialized" fund that is a quarter one name: WELL is
   // 24% of it, and healthcare REITs plus self-storage outweigh the apartment
   // landlords the theme label implies.

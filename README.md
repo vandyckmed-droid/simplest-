@@ -273,9 +273,27 @@ hand and holds **top tens, not books** — XHS's ten rows are 22.4% of the fund
 and the other ~78% is unmapped, so every figure above is a sample of the largest
 positions. Coverage varies wildly with how concentrated the fund is: IHF's top
 ten is 71.2% of it (UNH alone is 20.9%) and REZ's is 69.7% (WELL alone is 24%),
-where XPH's is 25.5%. Five funds are mapped so far — XHS, IHF, CRAK, XPH, REZ —
-and adding more is a matter of appending `[ticker, weight]` rows; the renderer
-warns if a listed symbol is not a scored fund. And weights are current while momentum is historical: a name bought
+where XPH's is 25.5%. Six funds are mapped so far — XHS, IHF, CRAK, XPH, REZ,
+CIBR — and adding more is a matter of appending `[ticker, weight]` rows; the
+renderer warns if a listed symbol is not a scored fund.
+
+The size of the gap is itself the interesting reading, and it varies more than
+the "funds score higher" rule suggests:
+
+| | fund ret | holdings | fund vol | holdings | fund blend | holdings |
+|---|---|---|---|---|---|---|
+| XHS | 52% | 60% | 17% | 63% | **+2.97** | +1.08 |
+| IHF | 48% | 57% | 20% | 34% | **+2.51** | +1.63 |
+| CIBR | 50% | 77% | 29% | 51% | **+1.66** | +1.63 |
+| REZ | 24% | 27% | 16% | 23% | **+1.43** | +1.19 |
+
+CIBR is the case where it nearly vanishes. Its volatility still collapses — 51%
+across the top ten down to 29% for the fund — but its return collapses with it,
+50% against the top ten's 77%, because those ten are only 58% of the book and
+the other 42% did far worse. The two effects cancel and the fund ends up scoring
+what its largest holdings score. REZ is the opposite reason for a small gap: ten
+REITs that already move together barely diversify, so there is little
+denominator to gain. And weights are current while momentum is historical: a name bought
 last month is credited with a year of returns the fund did not hold through.
 
 ## Health of the list
