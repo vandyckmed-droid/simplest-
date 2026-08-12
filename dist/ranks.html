@@ -477,13 +477,6 @@
   /* .filters and .head are flex/grid, which outranks the hidden attribute */
   [hidden] { display: none !important; }
 
-  .note {
-    padding: 18px 16px 8px;
-    font-size: 10px;
-    line-height: 1.6;
-    color: var(--muted);
-  }
-
   @media (min-width: 600px) {
     .shell { border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); min-height: 100vh; }
   }
@@ -529,7 +522,6 @@
 
   <div class="sum" id="sum" hidden></div>
   <main class="list" id="list"></main>
-  <p class="note" id="note"></p>
 </div>
 
 <nav class="tabs">
@@ -964,7 +956,6 @@
     document.getElementById("head").hidden = !list;
     document.getElementById("sum").hidden = view !== "basket";
     document.getElementById("settings-panel").hidden = view !== "settings";
-    document.getElementById("note").hidden = view === "settings";
     document.getElementById("tab-ranks").setAttribute("aria-pressed", String(list));
     document.getElementById("tab-basket").setAttribute("aria-pressed", String(view === "basket"));
     document.getElementById("tab-settings").setAttribute("aria-pressed", String(view === "settings"));
@@ -991,14 +982,6 @@
     else if (view === "settings") renderSettings();
     else renderRanks();
   }
-
-  document.getElementById("note").textContent =
-    "Each score is a window's annualised log return over its own annualised volatility. Blend is the mean " +
-    "of 12-1 and 6-1; switching the metric switches score, ret and vol together. Basket weights are 1/vol " +
-    "on the blend, normalised. \u2248 flags a name correlating " + CORR_FLAG.toFixed(2) + "+ with a single holding, on 52 " +
-    "weekly returns; a red dot flags a sector already at " + Math.round(SECTOR_FLAG * 100) + "%+ of the basket " +
-    "(min " + SECTOR_MIN + " names). US common stock on NYSE/Nasdaq/AMEX, $5+ and $25M+ median daily dollar " +
-    "volume; preferreds, units and duplicate share classes removed. Not investment advice.";
 
   recomputeCorr();
   recomputeSectors();
