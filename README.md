@@ -210,3 +210,50 @@ src/ranks-build.js       universe -> prices -> scores + corr vectors -> data/ran
 src/ranks-template.html  the page; __DATA__ is the injection point
 src/ranks-render.js      inlines the JSON, writes dist/ranks.html
 ```
+
+---
+
+# ETF universe (staged, not yet wired)
+
+`src/etf-universe.js` holds a thematic ETF list — **16 themes, 93 unique funds,
+120 listings** — for a planned Settings toggle that switches the Ranks list
+between single stocks and these funds. Nothing reads it yet.
+
+It is stored as ordered groups rather than a flat ticker list because the
+grouping carries meaning: 24 funds sit under more than one theme (GRID is grid
+infrastructure, water infrastructure *and* electrification; COPX is a copper
+miner and a battery-materials play), and the lens you arrive through changes
+what the fund is to you. `ETF_UNIVERSE` derives one entry per ticker, keeping
+every theme it belongs to plus any alternate label.
+
+## What the scoring side would need
+
+Nothing, for the maths — an ETF has adjusted closes like anything else, so
+`src/momentum.js` scores it unchanged. What needs replacing is the *universe*
+step: `src/universe.js` exists specifically to throw funds away.
+
+Liquidity is the real difference. Median daily dollar volume across these funds
+runs from under $0.1M (NERD) to $6.5B (SMH), and the $25M floor governing the
+stock universe would delete 39 of the 89 scoreable funds — most of the thematic
+ones the list exists for. Survivors by floor: **$1M → 76, $5M → 62, $25M → 50**.
+ETF mode needs its own floor, near $1M.
+
+## Health of the list
+
+```
+npm run etf:check
+```
+
+Re-run before building on it. Thematic ETFs close and get renamed far more often
+than stocks do, and a dead fund still returns a *quote* — it is the history that
+stops moving, which is what the check actually looks at.
+
+As of 2026-08-12, 89 of 93 score cleanly. The four that do not are kept in the
+list as given rather than quietly swapped, and recorded in `ETF_ISSUES`:
+
+| Ticker | Problem |
+|---|---|
+| `VPN` | Quotes but no adjusted history. Global X renamed it "Data Center REITs & Digital Infrastructure"; ~25k shares/day. **`DTCR`** covers the same theme at ~674k shares/day. |
+| `PBS` | Quotes but no adjusted history. Invesco Dynamic Media, ~2k shares/day — effectively untradeable. |
+| `BJK` | Stopped trading; last bar 2026-05-18. |
+| `EATZ` | Stopped trading; last bar 2026-05-07. |

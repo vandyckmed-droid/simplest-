@@ -10,7 +10,8 @@
     "render": "node src/render.js",
     "ranks": "node src/ranks-build.js && node src/ranks-render.js",
     "ranks:data": "node src/ranks-build.js",
-    "ranks:render": "node src/ranks-render.js"
+    "ranks:render": "node src/ranks-render.js",
+    "etf:check": "node src/etf-check.js"
   },
   "engines": {
     "node": ">=20"
