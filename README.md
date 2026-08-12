@@ -171,18 +171,23 @@ Anything meant to be legible at 12px has to be checked at 12px.
 
 ## Metrics
 
-`Blend / 12-1 / 6-1` switches score, return **and** volatility together — the
-alternative leaves two of the three columns describing a different window than
-the one you selected. Weights always size on blended volatility: changing the
+`Blend / 12-1 / 6-1`, in Settings, switches score, return **and** volatility
+together — the alternative leaves two of the three columns describing a
+different window than the one you selected. The active metric names the score
+column, so it stays visible from the list. Weights always size on blended volatility: changing the
 displayed metric changes what you are reading, not how the basket is built.
 
-## Filters
+## Settings
 
-A third tab, currently holding one control: **market cap**, `All` or
-`Top 500`. "Top 500 largest" is stored as a *rank*, not a dollar line — an
-absolute threshold drifts as the market moves, a rank does not. The page ranks
-every name by market cap once at load and the filter is `capRank <= 500`
-(currently $16.7B and up).
+A third tab holding both controls that change what the list shows: the
+**metric** switch and a **market cap** cutoff. Neither lives in the Ranks
+header — that keeps the list itself to a search box, a sector dropdown and the
+column headers.
+
+"Top 500 largest" is stored as a *rank*, not a dollar line — an absolute
+threshold drifts as the market moves, a rank does not. The page ranks every
+name by market cap once at load and the filter is `capRank <= 500` (currently
+$16.7B and up).
 
 Filters decide who is listed, never what anything scores: the momentum blend
 is computed against the whole universe and does not move. The rank column is
