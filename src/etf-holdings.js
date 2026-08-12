@@ -81,6 +81,25 @@ export const ETF_HOLDINGS = {
     ],
   },
 
+  // A "residential and specialized" fund that is a quarter one name: WELL is
+  // 24% of it, and healthcare REITs plus self-storage outweigh the apartment
+  // landlords the theme label implies.
+  REZ: {
+    asOf: '2026-08-10',
+    holdings: [
+      ['WELL', 24.00],
+      ['PSA', 10.08],
+      ['VTR', 7.77],
+      ['EXR', 5.67],
+      ['AVB', 4.21],
+      ['EQR', 4.20],
+      ['ESS', 3.80],
+      ['INVH', 3.71],
+      ['MAA', 3.20],
+      ['SUI', 3.05],
+    ],
+  },
+
   XPH: {
     asOf: '2026-08-09',
     holdings: [

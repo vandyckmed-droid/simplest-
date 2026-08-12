@@ -272,10 +272,10 @@ completeness it does not have. FMP's ETF-holdings endpoint answers 402
 hand and holds **top tens, not books** — XHS's ten rows are 22.4% of the fund
 and the other ~78% is unmapped, so every figure above is a sample of the largest
 positions. Coverage varies wildly with how concentrated the fund is: IHF's top
-ten is 71.2% of it (UNH alone is 20.9%), where XPH's is 25.5%. Four funds are
-mapped so far — XHS, IHF, CRAK, XPH — and adding more is a matter of appending
-`[ticker, weight]` rows; the renderer warns if a listed symbol is not a scored
-fund. And weights are current while momentum is historical: a name bought
+ten is 71.2% of it (UNH alone is 20.9%) and REZ's is 69.7% (WELL alone is 24%),
+where XPH's is 25.5%. Five funds are mapped so far — XHS, IHF, CRAK, XPH, REZ —
+and adding more is a matter of appending `[ticker, weight]` rows; the renderer
+warns if a listed symbol is not a scored fund. And weights are current while momentum is historical: a name bought
 last month is credited with a year of returns the fund did not hold through.
 
 ## Health of the list
