@@ -356,8 +356,8 @@
     opacity: .85;
   }
 
-  /* Sector concentration: a dot, not a label. Small enough to cost nothing,
-     lit enough to catch the eye on either ground. */
+  /* Already represented: a dot, not a label. Small enough to cost nothing, lit
+     enough to catch the eye on either ground. */
   .dot {
     flex: 0 0 auto;
     width: 7px;
@@ -365,21 +365,6 @@
     border-radius: 50%;
     background: var(--warn);
     box-shadow: 0 0 0 2px rgba(var(--warn-glow), .16), 0 0 7px 1px rgba(var(--warn-glow), .55);
-  }
-
-  /* Flags are the one place a second hue appears. They carry their own number,
-     so the colour is emphasis rather than the message. */
-  .sub em {
-    flex: 0 0 auto;
-    font-style: normal;
-    font-weight: 600;
-    font-size: 9.5px;
-    letter-spacing: .02em;
-    color: var(--flag);
-    background: var(--flag-bg);
-    border-radius: 3px;
-    padding: 1.5px 4px;
-    white-space: nowrap;
   }
 
   .n {
@@ -655,11 +640,14 @@
 __HRP__
 
   const PORTFOLIO = 10000; // the hypothetical book that cash display sizes against
-  const CORR_FLAG = 0.60;
-  // A sector only counts as crowded once there is enough of a basket for the
-  // share to mean anything.
-  const SECTOR_FLAG = 0.30;
-  const SECTOR_MIN = 3;
+  /* One mark, one question: is this name's behaviour already available from
+     what I hold? `spannedR2` answers it — the share of the candidate's movement
+     explained by regressing it on every holding at once. Half is the line.
+
+     Measured against the real universe, the flag rate rises with the basket
+     rather than exploding: 0.6% of names against a single holding, 0.9%
+     against eight, 5.7% against fourteen. */
+  const OVERLAP_FLAG = 0.50;
   const PAGE = 120;
 
   // 0 = blend, 1 = 12-1, 2 = 6-1; the switch moves score, ret and vol together.
@@ -742,11 +730,9 @@ __HRP__
       hasHoldings: src.items.some((it) => it.h),
       asOf: src.asOf ?? DATA.asOf,
       vec: decodeVectors(src.items),
-      // Highest correlation between each item and anything currently held, kept
-      // as an array so rows can be flagged without recomputing per render.
-      maxRho: new Float32Array(N),
-      maxWith: new Int32Array(N),
-      share: new Map(),
+      // Share of each item already spanned by the basket, kept as an array so
+      // rows can be flagged without recomputing per render.
+      overlap: new Float32Array(N),
     };
   }
   /* ---------- state ---------- */
@@ -786,39 +772,34 @@ __HRP__
     state.sector = "";
     fillSectors();
     saveFilters();
-    recomputeCorr();
-    recomputeSectors();
+    recomputeOverlap();
     shown = PAGE;
     render();
   }
 
   const held = () => U.items.filter((it) => U.picked.has(it.symbol));
 
-  /** Share of the basket already sitting in each group. */
-  function recomputeSectors() {
-    U.share = new Map();
-    const h = held();
-    if (h.length < SECTOR_MIN) return;
-    const counts = new Map();
-    for (const it of h) counts.set(it.k, (counts.get(it.k) ?? 0) + 1);
-    for (const [k, n] of counts) {
-      if (n >= SECTOR_MIN && n / h.length >= SECTOR_FLAG) U.share.set(k, n / h.length);
-    }
-  }
-
-  function recomputeCorr() {
-    U.maxRho.fill(-2);
-    U.maxWith.fill(-1);
+  /**
+   * How much of every candidate is already in the basket. The holdings'
+   * correlation matrix is factorised once, so each candidate costs one pass to
+   * gather its correlations and O(k²) to solve.
+   */
+  function recomputeOverlap() {
+    U.overlap.fill(0);
     const h = held();
     if (!h.length) return;
+
+    const L = cholesky(shrunkCorrelation(h.map((s) => ({
+      u: U.vec.subarray(s.i * T, s.i * T + T),
+      sd: s.sd > 0 ? s.sd : Math.max(s.vl[0], 1e-6),
+    }))));
+
+    const at = h.map((s) => s.i);
+    const c = new Float64Array(at.length);
     for (let i = 0; i < U.N; i++) {
-      const self = U.picked.has(U.items[i].symbol);
-      for (const x of h) {
-        if (x.i === i) continue;
-        const r = rho(i, x.i);
-        if (r > U.maxRho[i]) { U.maxRho[i] = r; U.maxWith[i] = x.i; }
-      }
-      if (self && U.maxWith[i] === -1) U.maxRho[i] = -2;
+      if (U.picked.has(U.items[i].symbol)) continue; // already in; nothing to warn about
+      for (let j = 0; j < at.length; j++) c[j] = rho(i, at[j]);
+      U.overlap[i] = spannedR2(L, c, T);
     }
   }
 
@@ -834,8 +815,7 @@ __HRP__
     if (U.picked.has(symbol)) U.picked.delete(symbol);
     else U.picked.add(symbol);
     save();
-    recomputeCorr();
-    recomputeSectors();
+    recomputeOverlap();
     render();
   }
 
@@ -996,23 +976,16 @@ __HRP__
       sub.append(nm);
     }
 
-    if (U.maxRho[s.i] >= CORR_FLAG && U.maxWith[s.i] >= 0) {
-      const twin = U.items[U.maxWith[s.i]].symbol;
-      const em = document.createElement("em");
-      em.textContent = "≈" + U.maxRho[s.i].toFixed(2).slice(1) + " " + twin;
-      em.title = `correlation ${U.maxRho[s.i].toFixed(2)} with ${twin}`;
-      em.setAttribute("aria-label", `correlated ${U.maxRho[s.i].toFixed(2)} with ${twin}`);
-      sub.append(em);
-    }
-
-    const share = U.share.get(s.k);
-    if (share !== undefined) {
-      const pct = Math.round(share * 100) + "%";
+    // Already represented: the one mark on a row, and it says only that.
+    if (U.overlap[s.i] >= OVERLAP_FLAG) {
+      const pct = Math.round(U.overlap[s.i] * 100);
+      const n = U.picked.size;
+      const label = `${pct}% of this name is already explained by the ${n} name${n === 1 ? "" : "s"} you hold`;
       const dot = document.createElement("span");
       dot.className = "dot";
-      dot.title = `${pct} of the basket is already ${s.group}`;
+      dot.title = label;
       dot.setAttribute("role", "img");
-      dot.setAttribute("aria-label", `${pct} of the basket is already ${s.group}`);
+      dot.setAttribute("aria-label", label);
       sub.append(dot);
     }
     id.append(tkr, sub);
@@ -1248,7 +1221,7 @@ __HRP__
     sum.append(head);
 
     const frag = document.createDocumentFragment();
-    for (const [sym, wt, i] of fund.h) {
+    for (const [sym, wt, i, note] of fund.h) {
       const row = document.createElement("div");
       row.className = "row static grid-hold";
 
@@ -1263,9 +1236,10 @@ __HRP__
       tkr.textContent = sym;
       const sub = document.createElement("span");
       sub.className = "sub";
-      // A name that misses the stock universe is nearly always under the $25M
-      // liquidity floor — a fact about the fund's book, so it is marked, not hidden.
-      const label = i >= 0 ? stocks[i].name : "below the liquidity floor";
+      // A miss is a fact about the fund's book, so it is marked rather than
+      // hidden — and it says only what is known. Some are under the $25M
+      // liquidity floor; CRAK's are foreign lines that were never candidates.
+      const label = i >= 0 ? stocks[i].name : note;
       if (label) {
         const nm = document.createElement("i");
         nm.textContent = label;
@@ -1342,7 +1316,6 @@ __HRP__
     else renderRanks();
   }
 
-  recomputeCorr();
-  recomputeSectors();
+  recomputeOverlap();
   render();
 </script>

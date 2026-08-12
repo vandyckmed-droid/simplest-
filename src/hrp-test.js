@@ -6,7 +6,7 @@
 // failure here is a real change in the maths and not a bad draw.
 
 import assert from 'node:assert/strict';
-import { hrpWeights, apportion, capAndNormalise, cluster, shrinkCovariance, sampleCovariance } from './hrp.js';
+import { hrpWeights, apportion, capAndNormalise, cluster, shrinkCovariance, sampleCovariance, shrunkCorrelation, cholesky, spannedR2 } from './hrp.js';
 
 const T = 252;
 const DAILY = 0.02; // ~32% annualised, so the vols in these tests look like real ones
@@ -234,5 +234,48 @@ function distanceOf(rows) {
   }
   return D;
 }
+
+const rhoOf = (a, b) => { let t = 0; for (let i = 0; i < a.length; i++) t += a[i] * b[i]; return t; };
+const unit = (v) => { const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0)); return v.map((x) => x / n); };
+const span = (rows, u) => spannedR2(cholesky(shrunkCorrelation(rows)), Float64Array.from(rows, (r) => rhoOf(u, r.u)), T);
+
+check('spanning: an exact twin is fully explained, an unrelated name is not', () => {
+  const rows = blocks(41, [4], 0.3);
+  close(span(rows, rows[0].u), 1, 0.02, 'a holding against itself');
+
+  const [stranger] = blocks(97, [1], 0);
+  assert.ok(span(rows, stranger.u) < 0.15, `an independent name scored ${span(rows, stranger.u).toFixed(3)}`);
+});
+
+// The case a pairwise threshold cannot see: correlated with everything a
+// little, with nothing enough to trip a 0.6 rule, and yet fully redundant.
+check('spanning catches diffuse overlap that no pairwise threshold sees', () => {
+  const rows = blocks(53, [1, 1, 1, 1, 1], 0);
+  const blend = unit(rows[0].u.map((_, t) => sum(rows.map((r) => r.u[t]))));
+  const worst = Math.max(...rows.map((r) => rhoOf(blend, r.u)));
+  assert.ok(worst < 0.55, `no single holding should look like a twin (max ρ ${worst.toFixed(2)})`);
+  assert.ok(span(rows, blend) > 0.9, `but it is spanned (R² ${span(rows, blend).toFixed(3)})`);
+});
+
+// And the case correlation-with-the-portfolio cannot see: a twin of one holding,
+// inside a book whose net movement is driven by everything else.
+check('spanning catches a twin that portfolio correlation misses', () => {
+  const all = blocks(61, [3, 2], 0.9);
+  const rows = all.slice(0, 4);          // three from one cluster, one from the other
+  const twin = all[4];                   // the second member of that other cluster
+
+  const port = unit(twin.u.map((_, t) => sum(rows.map((r) => r.u[t]))));
+  const pr = Math.abs(rhoOf(twin.u, port));
+  assert.ok(pr < 0.45, `portfolio correlation should be weak here (${pr.toFixed(2)})`);
+  assert.ok(span(rows, twin.u) > 0.6, `yet the name is spanned (R² ${span(rows, twin.u).toFixed(3)})`);
+});
+
+check('spanning survives a basket holding the same exposure twice', () => {
+  const [a] = blocks(71, [1], 0);
+  const near = { u: unit(a.u.map((x, i) => x + (i % 2 ? 1e-4 : -1e-4))), sd: a.sd };
+  const rows = [a, near, ...blocks(73, [2], 0.2)];
+  const r2 = span(rows, a.u);
+  assert.ok(Number.isFinite(r2) && r2 > 0.9 && r2 <= 1, `near-singular basket gave ${r2}`);
+});
 
 console.log(`\n${passed} checks passed`);

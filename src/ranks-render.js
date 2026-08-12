@@ -86,7 +86,12 @@ const stockRow = new Map(data.stocks.map((s, i) => [s.symbol, i]));
 const holdingsFor = (symbol) => {
   const entry = ETF_HOLDINGS[symbol];
   if (!entry) return undefined;
-  return entry.holdings.map(([sym, wt]) => [sym, wt, stockRow.has(sym) ? stockRow.get(sym) : -1]);
+  return entry.holdings.map(([sym, wt, note]) => {
+    const at = stockRow.has(sym) ? stockRow.get(sym) : -1;
+    // A note only matters for a name that misses; carrying one for a name that
+    // resolved would just bloat the payload.
+    return at >= 0 ? [sym, wt, at] : [sym, wt, -1, note ?? 'not in the stock universe'];
+  });
 };
 
 const mappedFunds = etfData.funds.filter((f) => ETF_HOLDINGS[f.symbol]).length;

@@ -1,5 +1,7 @@
-// Hierarchical Risk Parity — López de Prado's allocator, plus the Ledoit-Wolf
-// shrinkage that makes it usable on a short sample.
+// The portfolio maths: Hierarchical Risk Parity — López de Prado's allocator —
+// plus the Ledoit-Wolf shrinkage that makes it usable on a short sample, and
+// the overlap measure behind the page's red dot, which is built on the same
+// shrunk covariance so the two agree about what is correlated with what.
 //
 // This file is both a Node module (so `npm run test:hrp` can check the maths
 // against cases with known answers) and the page's allocator: src/ranks-render.js
@@ -334,6 +336,81 @@ function normalise(weights) {
   return weights.map((x) => x / total);
 }
 
+/* ---------- overlap ----------
+   How much of a candidate is already in the book. Same shrunk covariance as
+   the allocator, so the two agree about what is correlated with what. */
+
+/** Shrunk correlation matrix over a set of holdings. */
+function shrunkCorrelation(rows) {
+  const T = rows[0].u.length;
+  const Y = returnsMatrix(rows, T);
+  const { sigma } = shrinkCovariance(Y, sampleCovariance(Y, T), T);
+  const k = sigma.length;
+  const C = Array.from({ length: k }, () => new Float64Array(k));
+  for (let i = 0; i < k; i++) {
+    for (let j = 0; j < k; j++) {
+      C[i][j] = sigma[i][j] / Math.sqrt(Math.max(sigma[i][i] * sigma[j][j], EPS));
+    }
+  }
+  return C;
+}
+
+/**
+ * Lower-triangular Cholesky factor, computed once per basket so each candidate
+ * costs O(k²) rather than a fresh solve. The diagonal is floored rather than
+ * allowed to fail: two holdings that are near-identical make C singular, and a
+ * basket holding the same exposure twice is the case this measure exists for.
+ */
+function cholesky(C) {
+  const n = C.length;
+  const L = Array.from({ length: n }, () => new Float64Array(n));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let s = C[i][j];
+      for (let m = 0; m < j; m++) s -= L[i][m] * L[j][m];
+      if (i === j) L[i][i] = Math.sqrt(Math.max(s, 1e-10));
+      else L[i][j] = s / L[j][j];
+    }
+  }
+  return L;
+}
+
+/**
+ * The share of a candidate's variance spanned by the holdings — the R² of
+ * regressing it on all of them at once, as c'C⁻¹c.
+ *
+ * This is the one number behind the red dot, and it is a strictly better
+ * question than either of the obvious two. *Highest correlation with any single
+ * holding* misses diffuse overlap — a name correlated 0.5 with five things you
+ * own is plainly redundant and trips no pairwise threshold — and it inflates
+ * with basket size, flagging 11% of the universe against a fourteen-name book.
+ * *Correlation with the portfolio* is worse still: it is measured against the
+ * basket's net movement, so a perfect twin of one holding can score near zero.
+ * Against a diversified eight-name book, CVX — which correlates 0.84 with the
+ * XOM already in it — comes out at −0.04, because the book is tech-heavy and
+ * energy runs the other way. Spanning answers what is actually being asked: is
+ * this name's behaviour already available from what I hold?
+ *
+ * R² is adjusted for the number of regressors, since k holdings explain
+ * roughly k/T of any candidate by chance alone.
+ */
+function spannedR2(L, c, T) {
+  const k = c.length;
+  const y = new Float64Array(k);
+  for (let i = 0; i < k; i++) {
+    let s = c[i];
+    for (let m = 0; m < i; m++) s -= L[i][m] * y[m];
+    y[i] = s / L[i][i];
+  }
+  // c'C⁻¹c = ||L⁻¹c||², so the forward substitution alone is enough.
+  let r2 = 0;
+  for (let i = 0; i < k; i++) r2 += y[i] * y[i];
+  r2 = Math.max(0, Math.min(1, r2));
+
+  const adjusted = k < T - 2 ? 1 - (1 - r2) * (T - 1) / (T - k - 1) : r2;
+  return Math.max(0, Math.min(1, adjusted));
+}
+
 /**
  * Whole units that sum to exactly `total` — largest remainder, so 100% of a
  * basket reads as 100 and a $10,000 portfolio adds up to $10,000. Rounding each
@@ -350,4 +427,4 @@ function apportion(weights, total) {
   return base;
 }
 
-export { hrpWeights, shrinkCovariance, sampleCovariance, distanceMatrix, cluster, bisect, capAndNormalise, apportion, normalise };
+export { hrpWeights, shrinkCovariance, sampleCovariance, distanceMatrix, cluster, bisect, capAndNormalise, apportion, normalise, shrunkCorrelation, cholesky, spannedR2 };

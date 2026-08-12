@@ -16,9 +16,18 @@
 //     through.
 //
 // Weights are per cent of the fund. Symbols are matched against the stock
-// universe at render time; ones that miss (usually because they sit under the
-// $25M median dollar volume floor) are kept and marked, since a hole in the
-// mapping is information about the fund's book too.
+// universe at render time; ones that miss are kept and marked, since a hole in
+// the mapping is information about the fund's book too.
+//
+// A row may carry a third element saying *why* it will not match. Without one
+// the page says only that the name is not in the stock universe, which is all
+// it can honestly infer — a miss is usually the $25M liquidity floor, but
+// CRAK's book is largely foreign lines (RIGD is a London GDR, 5020 is Tokyo,
+// 096770 is Seoul) that were never candidates for a US-listed universe, and
+// calling those thin would be wrong. The three US names that do miss are all
+// liquidity: USPH at $14M a day, CON at $24.5M and AMLX at $24.7M against a
+// $25M floor — two of them missing by less than a rounding error, which is
+// worth seeing rather than reading as "not tradeable".
 
 export const ETF_HOLDINGS = {
   XHS: {
@@ -32,8 +41,59 @@ export const ETF_HOLDINGS = {
       ['PACS', 2.24],
       ['ACHC', 2.11],
       ['RDNT', 2.11],
-      ['USPH', 2.06],
-      ['CON', 2.03],
+      ['USPH', 2.06, '$14M/day, under the $25M floor'],
+      ['CON', 2.03, '$24.5M/day, just under the $25M floor'],
+    ],
+  },
+
+  IHF: {
+    asOf: '2026-08-09',
+    holdings: [
+      ['UNH', 20.91],
+      ['CVS', 13.28],
+      ['ELV', 7.11],
+      ['VEEV', 5.11],
+      ['HCA', 4.62],
+      ['HUM', 4.41],
+      ['CNC', 4.25],
+      ['CI', 3.92],
+      ['LH', 3.82],
+      ['DGX', 3.81],
+    ],
+  },
+
+  // Refining is a global business and the fund is built like one: six of these
+  // ten are foreign lines, so the top ten covers 57.7% of the fund but only
+  // 26.9% of it lands in a US-listed universe.
+  CRAK: {
+    asOf: '2026-08-09',
+    holdings: [
+      ['MPC', 8.35],
+      ['VLO', 7.33],
+      ['RIGD', 7.16, 'Reliance Industries GDR, London'],
+      ['PSX', 6.61],
+      ['PKN', 5.32, 'Orlen, Warsaw'],
+      ['NESTE', 4.82, 'Neste, Helsinki'],
+      ['DINO', 4.65],
+      ['5020', 4.57, 'ENEOS, Tokyo'],
+      ['096770', 4.55, 'SK Innovation, Seoul'],
+      ['MOL', 4.37, 'MOL, Budapest'],
+    ],
+  },
+
+  XPH: {
+    asOf: '2026-08-09',
+    holdings: [
+      ['CRNX', 3.60],
+      ['MBX', 3.13],
+      ['DFTX', 2.85],
+      ['ATAI', 2.81],
+      ['AMLX', 2.47, '$24.7M/day, just under the $25M floor'],
+      ['ELVN', 2.36],
+      ['CORT', 2.14],
+      ['NUVB', 2.11],
+      ['LQDA', 2.05],
+      ['ALMS', 2.01],
     ],
   },
 };

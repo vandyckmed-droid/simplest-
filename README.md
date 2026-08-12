@@ -154,21 +154,41 @@ scale has to be set low enough for the worst crash day in the universe and
 wastes resolution on everything else. `src/ranks-build.js` checks the quantised
 vectors against exact correlations on every run: max |Δρ| ≈ 0.004, mean ≈ 0.001.
 
-A row is flagged when it correlates ≥0.60 with **any single name already
-held**; the tag names the twin and the figure (`≈.84 XOM`). Holding a
-diversified eight-name mega-cap basket flags 27 of 1,517.
+## Already represented
 
-That is fewer than the 52 the old weekly vectors flagged, because daily
-correlations run lower than weekly ones — aggregating to weeks averages out
-idiosyncratic noise and lifts every pair. Against the daily distribution 0.60 is
-well into the tail: the universe's median pairwise ρ is 0.11 and the 95th
-percentile is 0.39. Dropping the threshold to 0.55 would flag 47 and 0.50 would
-flag 71, if the mark is wanted more often.
+One mark on a row — a red dot with a soft glow — answering one question: is this
+name's behaviour already available from what I hold?
 
-**Sector concentration** is a red dot with a soft glow, not a label: the row's
-sector is already ≥30% of the basket, with at least three names in it — below
-that a percentage is too noisy to mean anything. A diversified eight-sector
-basket trips neither mark.
+The measure is the **share of a candidate's variance spanned by the basket**:
+the R² of regressing its returns on every holding at once, computed as `c'C⁻¹c`
+against the same shrunk correlation matrix the allocator uses, and adjusted for
+the number of regressors since k holdings explain roughly k/T of anything by
+chance. The dot lights at **0.50** — half of this name is already in the book.
+
+Both of the obvious alternatives are worse, and measurably so:
+
+- **Highest correlation with any single holding** — what this page used to show
+  — misses diffuse overlap. A name correlated 0.5 with five things you own is
+  plainly redundant and trips no pairwise threshold. It also inflates with
+  basket size: against eight holdings it flags 1.8% of the universe, against
+  fourteen it flags 11.2%, which is a mark firing on one row in nine.
+- **Correlation with the portfolio** is worse still, because it measures against
+  the basket's *net* movement. Against a diversified eight-name book, CVX —
+  which correlates 0.84 with the XOM already in it — comes out at **−0.04**. The
+  book is tech-heavy, energy runs the other way, and the two cancel. A perfect
+  twin of a holding can score zero.
+
+Spanning has neither failure. Its flag rate rises with the basket instead of
+exploding — 0.6% of the universe against a single holding, 0.9% against eight,
+5.7% against fourteen — because a fuller book genuinely does represent more of
+the market. And it discriminates within a sector: holding XOM and CVX, the E&P
+names light up (EOG 68%, OVV 62%, APA 58%) while refiners and midstream stay
+clean, which is right — those have different drivers than integrated oil.
+
+Names already held carry no dot; there is nothing to warn about.
+
+The holdings' correlation matrix is factorised once per basket change, so each
+candidate costs one pass to gather its correlations and O(k²) to solve.
 
 ## Names
 
@@ -304,7 +324,7 @@ it, and a column of weights is a thing readers add up.
 ```
 src/universe.js          screener output -> tradeable common stock
 src/ranks-build.js       universe -> prices -> scores + return vectors -> data/ranks.json
-src/hrp.js               shrinkage, clustering, bisection, cap — no DOM, no imports
+src/hrp.js               shrinkage, clustering, bisection, cap, overlap — no DOM, no imports
 src/hrp-test.js          npm run test:hrp
 src/ranks-template.html  the page; __DATA__ and __HRP__ are the injection points
 src/etf-holdings.js      hand-kept top holdings per fund, resolved at render time
@@ -360,9 +380,9 @@ Names come from the theme list rather than the fund's legal name: SMH is
 Baskets are **per universe**, in separate localStorage keys — switching to funds
 does not mix ETFs into a stock basket or empty it. The correlation and
 concentration flags work identically within each. Among funds they are blunt by
-nature: holding XLK, SMH and IGV flags 28 of 86, with AIQ≈XLK at 0.95,
-QTUM≈SMH at 0.92 and SKYY≈IGV at 0.91 — thematic tech funds overlap heavily,
-and the flag says so.
+nature: holding XLK, SMH and IGV leaves little of the tech complex unspanned —
+AIQ correlates 0.95 with XLK, QTUM 0.92 with SMH, SKYY 0.91 with IGV — so the
+dot lights across most of the theme, which is the honest answer.
 
 HRP has correspondingly less to work with among funds than among single stocks:
 where a stock basket's clusters are things the reader assembled by accident, a
@@ -397,16 +417,28 @@ names ranked 13th and 1,254th side by side — but because the blend is smooth. 
 stock's +2.97 and a fund's +2.97 are the same number describing different
 things, which is worth knowing when the two universes are one tap apart.
 
-Names that miss the stock universe are kept and marked rather than dropped:
-USPH and CON clear the $5 price floor but sit under the $25M median dollar
-volume line. A hole in the mapping is information about the fund's book too.
+Names that miss the stock universe are kept and marked rather than dropped, and
+the mark says only what is known. Three misses are liquidity, with the figure
+shown rather than a guess: USPH at $14M a day, CON at $24.5M and AMLX at $24.7M
+against a $25M floor — two of them short by less than a rounding error, which is
+worth seeing rather than reading as "not tradeable". Six are something else
+entirely: CRAK's book is largely foreign lines (RIGD is a London GDR, 5020 is
+Tokyo, 096770 is Seoul) that were never candidates for a US-listed universe, and
+calling those thin would be wrong. A hole in the mapping is information about
+the fund's book too — refining is a global business and CRAK is built like one,
+so its top ten covers 57.7% of the fund but only 26.9% of it lands in a
+US-listed universe.
 
 Two limits are structural, and the page states both rather than implying a
 completeness it does not have. FMP's ETF-holdings endpoint answers 402
 *Restricted Endpoint* on this key, so `src/etf-holdings.js` is transcribed by
 hand and holds **top tens, not books** — XHS's ten rows are 22.4% of the fund
 and the other ~78% is unmapped, so every figure above is a sample of the largest
-positions. And weights are current while momentum is historical: a name bought
+positions. Coverage varies wildly with how concentrated the fund is: IHF's top
+ten is 71.2% of it (UNH alone is 20.9%), where XPH's is 25.5%. Four funds are
+mapped so far — XHS, IHF, CRAK, XPH — and adding more is a matter of appending
+`[ticker, weight]` rows; the renderer warns if a listed symbol is not a scored
+fund. And weights are current while momentum is historical: a name bought
 last month is credited with a year of returns the fund did not hold through.
 
 ## Health of the list
