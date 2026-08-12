@@ -241,16 +241,22 @@
      inset by the 6px gap, so the digits centre on 24px — exactly halfway to the
      ticker's left edge at 48px. */
   .grid { grid-template-columns: 42px minmax(0, 1fr) 46px 50px 42px; }
+  /* ETF mode carries a look-through affordance, so every fund row reserves the
+     column — otherwise the numbers would shift between funds that have holdings
+     and funds that do not. */
+  .grid-peek { grid-template-columns: 42px minmax(0, 1fr) 46px 50px 42px 18px; }
+  .grid-hold { grid-template-columns: 42px minmax(0, 1fr) 46px 46px; }
   .grid-basket { grid-template-columns: minmax(0, 1fr) 46px 46px 42px; }
   /* "$1,000" needs more room than "10%"; two classes, so this beats .grid-basket */
   .grid-basket.cash { grid-template-columns: minmax(0, 1fr) 56px 44px 40px; }
 
   .list { display: flex; flex-direction: column; }
 
+  /* A div rather than a button: the look-through affordance is itself a button,
+     and a button inside a button is not valid HTML. Keyboard behaviour is
+     restored by hand — see the keydown handler on the row. */
   .row {
-    appearance: none;
     width: 100%;
-    border: 0;
     border-bottom: 1px solid var(--rule);
     background: transparent;
     color: inherit;
@@ -263,7 +269,35 @@
     gap: 6px;
     padding: 9px 16px 9px 0;
     min-height: 46px;
+    box-sizing: border-box;
   }
+
+  /* Holdings rows are a readout, not a control. */
+  .row.static { cursor: default; }
+
+  /* The look-through: a chevron drawn in rules, sized as a real tap target
+     while occupying 18px of column. */
+  .peek {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 12px 4px 12px 8px;
+    margin: -12px -4px -12px -8px;
+    cursor: pointer;
+    line-height: 0;
+  }
+
+  .peek::after {
+    content: "";
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-top: 1.2px solid var(--muted);
+    border-right: 1.2px solid var(--muted);
+    transform: rotate(45deg);
+  }
+
+  .peek:hover::after { border-color: var(--ink); }
 
   /* two classes, so this beats .row's shorthand rather than racing it */
   .row.grid-basket { padding-left: 16px; }
@@ -705,6 +739,7 @@ __HRP__
       groupLabel: src.groupLabel,
       groups: src.groups,
       hasCap: src.hasCap,
+      hasHoldings: src.items.some((it) => it.h),
       asOf: src.asOf ?? DATA.asOf,
       vec: decodeVectors(src.items),
       // Highest correlation between each item and anything currently held, kept
@@ -718,6 +753,7 @@ __HRP__
   const state = {
     view: "ranks", sort: "score", desc: true, q: "", sector: "",
     metric: 0, cap: 0, universe: "stocks", weight: "iv", display: "pct",
+    peek: null,
   };
 
   const WEIGHTS = ["eq", "iv", "hrp"];
@@ -743,6 +779,7 @@ __HRP__
   function setUniverse(key) {
     if (key === state.universe) return;
     state.universe = key;
+    state.peek = null;
     U = buildUniverse(key);
     // A sector name is not a theme name; carrying the old selection across would
     // silently match nothing.
@@ -896,7 +933,11 @@ __HRP__
   }
 
   document.getElementById("tab-settings").addEventListener("click", () => { state.view = "settings"; render(); });
-  document.getElementById("tab-ranks").addEventListener("click", () => { state.view = "ranks"; render(); });
+  document.getElementById("tab-ranks").addEventListener("click", () => {
+    state.view = "ranks";
+    state.peek = null;
+    render();
+  });
   document.getElementById("tab-basket").addEventListener("click", () => { state.view = "basket"; render(); });
 
   /* ---------- rendering ---------- */
@@ -925,9 +966,10 @@ __HRP__
   }
 
   function rowFor(s, ordinal, weight) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "row " + (state.view === "basket" ? basketGrid() : "grid");
+    const b = document.createElement("div");
+    b.setAttribute("role", "button");
+    b.tabIndex = 0;
+    b.className = "row " + (state.view === "basket" ? basketGrid() : listGrid());
     b.setAttribute("aria-pressed", String(U.picked.has(s.symbol)));
 
     if (state.view !== "basket") {
@@ -946,9 +988,13 @@ __HRP__
     sub.className = "sub";
     const mark = glyphFor(s.group);
     if (mark) sub.append(mark);
-    const nm = document.createElement("i");
-    nm.textContent = s.name;
-    sub.append(nm);
+    // An empty name means it tidied down to the ticker; the line is dropped
+    // rather than repeating what the row already says.
+    if (s.name) {
+      const nm = document.createElement("i");
+      nm.textContent = s.name;
+      sub.append(nm);
+    }
 
     if (U.maxRho[s.i] >= CORR_FLAG && U.maxWith[s.i] >= 0) {
       const twin = U.items[U.maxWith[s.i]].symbol;
@@ -980,9 +1026,30 @@ __HRP__
       b.append(cell(fmtScore(sc(s)), "score", sign(sc(s))));
       b.append(cell(fmtPct(rt(s))));
       b.append(cell(fmtPct(vl(s))));
+
+      // The row selects; the chevron looks through. Funds without a holdings
+      // list still get the empty cell so the columns stay put.
+      if (U.hasHoldings) {
+        if (s.h) {
+          const peek = document.createElement("button");
+          peek.type = "button";
+          peek.className = "peek";
+          peek.title = `${s.symbol} holdings`;
+          peek.setAttribute("aria-label", `Show ${s.symbol} holdings`);
+          peek.addEventListener("click", (e) => { e.stopPropagation(); openHoldings(s.symbol); });
+          b.append(peek);
+        } else {
+          b.append(document.createElement("span"));
+        }
+      }
     }
 
     b.addEventListener("click", () => toggle(s.symbol));
+    b.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      toggle(s.symbol);
+    });
     return b;
   }
 
@@ -1098,6 +1165,123 @@ __HRP__
   }
 
   const basketGrid = () => "grid-basket" + (state.display === "cash" ? " cash" : "");
+  const listGrid = () => (U.hasHoldings ? "grid-peek" : "grid");
+
+  /* ---------- look-through ----------
+     A fund's top holdings, resolved against the stock universe. Rank and score
+     follow the metric switch, so what you read here is the same number the
+     stock list would show. */
+  const rankCache = new Map();
+
+  function stockRanks() {
+    if (rankCache.has(state.metric)) return rankCache.get(state.metric);
+    const items = UNIVERSES.stocks.items;
+    const order = items.map((_, i) => i)
+      .sort((a, b) => items[b].sc[state.metric] - items[a].sc[state.metric]);
+    const rank = new Int32Array(items.length);
+    order.forEach((idx, i) => { rank[idx] = i + 1; });
+    rankCache.set(state.metric, rank);
+    return rank;
+  }
+
+  function openHoldings(symbol) {
+    state.peek = symbol;
+    state.view = "holdings";
+    render();
+  }
+
+  function renderHoldings() {
+    const fund = U.items.find((it) => it.symbol === state.peek);
+    const sum = document.getElementById("sum");
+    const list = document.getElementById("list");
+    sum.textContent = "";
+    list.textContent = "";
+
+    if (!fund || !fund.h) { state.view = "ranks"; render(); return; }
+
+    const stocks = UNIVERSES.stocks.items;
+    const rank = stockRanks();
+    const listed = fund.h.reduce((t, [, wt]) => t + wt, 0);
+
+    document.getElementById("meta").hidden = false;
+    document.getElementById("count-n").textContent = fund.h.length;
+    document.getElementById("asof").textContent = "holdings";
+
+    const line = (k, v, cls) => {
+      const row = document.createElement("div");
+      row.className = "sum-row";
+      const a = document.createElement("span");
+      a.textContent = k;
+      const b = document.createElement("span");
+      b.textContent = v;
+      if (cls) b.className = cls;
+      row.append(a, b);
+      sum.append(row);
+    };
+
+    // The fund's own score against its holdings' — the gap is the whole point.
+    // A fund of 70 names carries a fraction of its average constituent's
+    // volatility, and the score is a return divided by exactly that.
+    const matched = fund.h.filter(([, , i]) => i >= 0);
+    const mw = matched.reduce((t, [, wt]) => t + wt, 0);
+    line(fund.symbol + " blend", fmtScore(sc(fund)));
+    if (mw > 0) {
+      const wScore = matched.reduce((t, [, wt, i]) => t + wt * sc(stocks[i]), 0) / mw;
+      const wVol = matched.reduce((t, [, wt, i]) => t + wt * vl(stocks[i]), 0) / mw;
+      line("Holdings blend", fmtScore(wScore));
+      line("Holdings vol", fmtPct(wVol) + " vs " + fmtPct(vl(fund)));
+    }
+    line("Listed weight", listed.toFixed(1) + "% of fund");
+
+    const head = document.createElement("div");
+    head.className = "head grid-hold";
+    head.style.paddingLeft = "0";
+    head.style.paddingRight = "0";
+    head.style.marginTop = "16px";
+    for (const [text, cls] of [["#", "lbl"], ["Holding", "lbl l"], ["Wt", "lbl"], [METRICS[state.metric], "lbl"]]) {
+      const el = document.createElement("span");
+      el.className = cls;
+      el.textContent = text;
+      el.style.textAlign = cls.endsWith("l") ? "left" : cls === "lbl" && text === "#" ? "center" : "right";
+      head.append(el);
+    }
+    sum.append(head);
+
+    const frag = document.createDocumentFragment();
+    for (const [sym, wt, i] of fund.h) {
+      const row = document.createElement("div");
+      row.className = "row static grid-hold";
+
+      const r = document.createElement("span");
+      r.className = "rank";
+      r.textContent = i >= 0 ? rank[i] : "—";
+      row.append(r);
+
+      const id = document.createElement("span");
+      id.className = "id";
+      const tkr = document.createElement("b");
+      tkr.textContent = sym;
+      const sub = document.createElement("span");
+      sub.className = "sub";
+      // A name that misses the stock universe is nearly always under the $25M
+      // liquidity floor — a fact about the fund's book, so it is marked, not hidden.
+      const label = i >= 0 ? stocks[i].name : "below the liquidity floor";
+      if (label) {
+        const nm = document.createElement("i");
+        nm.textContent = label;
+        sub.append(nm);
+      }
+      id.append(tkr, sub);
+      row.append(id);
+
+      row.append(cell(wt.toFixed(2) + "%"));
+      row.append(i >= 0
+        ? cell(fmtScore(sc(stocks[i])), "score", sign(sc(stocks[i])))
+        : cell("—"));
+      frag.append(row);
+    }
+    list.append(frag);
+  }
 
   function renderSettings() {
     document.getElementById("meta").hidden = true;
@@ -1107,13 +1291,18 @@ __HRP__
   function render() {
     const view = state.view;
     const list = view === "ranks";
+    const peek = view === "holdings";
     document.getElementById("heading").textContent =
-      view === "basket" ? "Basket" : view === "settings" ? "Settings" : "Ranks";
+      view === "basket" ? "Basket" : view === "settings" ? "Settings" : peek ? state.peek : "Ranks";
     document.getElementById("seek").hidden = !list;
-    document.getElementById("head").hidden = !list;
-    document.getElementById("sum").hidden = view !== "basket";
+    const head = document.getElementById("head");
+    head.hidden = !list;
+    head.className = "head " + listGrid();
+    document.getElementById("sum").hidden = !(view === "basket" || peek);
     document.getElementById("settings-panel").hidden = view !== "settings";
-    document.getElementById("tab-ranks").setAttribute("aria-pressed", String(list));
+    // The look-through is reached from Ranks and returns there, so the Ranks
+    // tab stays lit rather than leaving no tab selected.
+    document.getElementById("tab-ranks").setAttribute("aria-pressed", String(list || peek));
     document.getElementById("tab-basket").setAttribute("aria-pressed", String(view === "basket"));
     document.getElementById("tab-settings").setAttribute("aria-pressed", String(view === "settings"));
 
@@ -1149,6 +1338,7 @@ __HRP__
 
     if (view === "basket") renderBasket();
     else if (view === "settings") renderSettings();
+    else if (peek) renderHoldings();
     else renderRanks();
   }
 

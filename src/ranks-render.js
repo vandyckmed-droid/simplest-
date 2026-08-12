@@ -9,10 +9,11 @@ const round = (v, dp) => (Number.isFinite(v) ? Number(v.toFixed(dp)) : null);
 
 // FMP names carry share-class and legal-form boilerplate that eats the one line
 // of width a phone gives the company name.
-const NOISE = [
-  /\s+(Class\s+[A-Z]\s+)?(Common\s+(Stock|Shares)|Ordinary\s+Shares)$/i,
-  /,?\s+(Inc\.?|Incorporated|Corp\.?|Corporation|Company|Co\.|Ltd\.?|Limited|plc|PLC|LLC|L\.P\.|LP|N\.V\.|S\.A\.|Holdings?|Group)$/,
-];
+const CLASS = /\s+(Class\s+[A-Z]\s+)?(Common\s+(Stock|Shares)|Ordinary\s+Shares)$/i;
+const LEGAL = /,?\s+(Inc\.?|Incorporated|Corp\.?|Corporation|Company|Co\.|Ltd\.?|Limited|plc|PLC|LLC|L\.P\.|LP|N\.V\.|S\.A\.)$/;
+// Stripped by default, but put back when dropping it would leave nothing but
+// the ticker: "PACS Group" earns its line where a bare "PACS" does not.
+const SUFFIX = /,?\s+(Holdings?|Group)$/;
 
 // Long words that survive the legal-form strip and still eat the one line of
 // width a phone gives the name. Only unambiguous ones — a reader has to
@@ -46,11 +47,12 @@ const SHORTEN = [
   [/\bTransportation\b/g, 'Transp'],
 ];
 
-function tidyName(name) {
+function strip(name, dropSuffix) {
   let out = name.trim();
   for (let pass = 0; pass < 3; pass++) {
     const before = out;
-    for (const re of NOISE) out = out.replace(re, '').trim();
+    out = out.replace(CLASS, '').trim().replace(LEGAL, '').trim();
+    if (dropSuffix) out = out.replace(SUFFIX, '').trim();
     if (out === before) break;
   }
   for (const [re, to] of SHORTEN) out = out.replace(re, to);
@@ -58,8 +60,41 @@ function tidyName(name) {
   return out.replace(/\s{2,}/g, ' ').replace(/[,\s]*(&|and)$/i, '').replace(/[,\s]+$/, '').trim() || name;
 }
 
+/**
+ * The company name as the row shows it, or "" when there is nothing left to
+ * say. 65 of the universe's names tidy down to their own ticker — Roku Inc. to
+ * "Roku", CSX Corporation to "CSX" — and a line repeating the ticker in grey
+ * underneath it reads as a bug. Backing the suffix strip off first rescues the
+ * ones with a real word in them; the rest lose the line.
+ */
+function tidyName(name, symbol) {
+  const same = (a) => a.toUpperCase() === symbol.toUpperCase();
+  const full = strip(name, true);
+  if (!same(full)) return full;
+  const kept = strip(name, false);
+  return same(kept) ? '' : kept;
+}
+
 const data = JSON.parse(await readFile(new URL('../data/ranks.json', import.meta.url), 'utf8'));
 const etfData = JSON.parse(await readFile(new URL('../data/etfs.json', import.meta.url), 'utf8'));
+const { ETF_HOLDINGS } = await import('./etf-holdings.js');
+
+// Holdings resolve against the stock universe here, at build time, so the page
+// carries an index rather than doing a symbol lookup per render. -1 means the
+// name is not in the stock universe — kept and marked rather than dropped.
+const stockRow = new Map(data.stocks.map((s, i) => [s.symbol, i]));
+const holdingsFor = (symbol) => {
+  const entry = ETF_HOLDINGS[symbol];
+  if (!entry) return undefined;
+  return entry.holdings.map(([sym, wt]) => [sym, wt, stockRow.has(sym) ? stockRow.get(sym) : -1]);
+};
+
+const mappedFunds = etfData.funds.filter((f) => ETF_HOLDINGS[f.symbol]).length;
+for (const symbol of Object.keys(ETF_HOLDINGS)) {
+  if (!etfData.funds.some((f) => f.symbol === symbol)) {
+    console.warn(`  holdings listed for ${symbol}, which is not a scored fund`);
+  }
+}
 
 // [blend, 12-1, 6-1] for each of score, return and volatility, so the metric
 // switch moves all three columns together.
@@ -85,7 +120,7 @@ const compact = {
       hasCap: true,
       items: data.stocks.map((s) => ({
         symbol: s.symbol,
-        name: tidyName(s.name),
+        name: tidyName(s.name, s.symbol),
         k: sectorIndex.get(s.sector) ?? 0,
         m: Math.round(s.marketCap / 1e6), // $M; the page ranks on it for the cap filter
         ...triples(s),
@@ -108,6 +143,7 @@ const compact = {
         ...triples(f),
         c: f.corr,
         sd: round(f.sd, 4),
+        h: holdingsFor(f.symbol), // [symbol, weight %, stock index or -1]
       })),
     },
   },
@@ -134,5 +170,6 @@ await writeFile(new URL('../dist/ranks.html', import.meta.url), html);
 
 console.log(
   `dist/ranks.html — ${(html.length / 1024).toFixed(0)} KB · ` +
-  `${compact.universes.stocks.items.length} stocks · ${compact.universes.etfs.items.length} funds`,
+  `${compact.universes.stocks.items.length} stocks · ${compact.universes.etfs.items.length} funds · ` +
+  `${mappedFunds} with holdings`,
 );

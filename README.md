@@ -170,6 +170,17 @@ sector is already ≥30% of the basket, with at least three names in it — belo
 that a percentage is too noisy to mean anything. A diversified eight-sector
 basket trips neither mark.
 
+## Names
+
+FMP's company names carry share-class and legal-form boilerplate that eats the
+one line of width a phone gives them, so it is stripped and a couple of dozen
+long words are abbreviated. Two cases need care: stripping "Company" off "Wells
+Fargo & Company" leaves a dangling ampersand, and 65 names tidy down to their
+own ticker — Roku Inc. to "Roku", CSX Corporation to "CSX" — where a grey line
+repeating the ticker above it reads as a bug. Backing the `Holdings`/`Group`
+strip off rescues the ones with a real word in them (`PACS Group`, `HCI Group`);
+the remaining 55 lose the line and show ticker alone.
+
 ## Marks
 
 Every row carries a 12px line-drawing of its sector, keyed by sector *name* so
@@ -296,6 +307,7 @@ src/ranks-build.js       universe -> prices -> scores + return vectors -> data/r
 src/hrp.js               shrinkage, clustering, bisection, cap — no DOM, no imports
 src/hrp-test.js          npm run test:hrp
 src/ranks-template.html  the page; __DATA__ and __HRP__ are the injection points
+src/etf-holdings.js      hand-kept top holdings per fund, resolved at render time
 src/ranks-render.js      inlines the JSON and src/hrp.js, writes dist/ranks.html
 ```
 
@@ -355,6 +367,47 @@ and the flag says so.
 HRP has correspondingly less to work with among funds than among single stocks:
 where a stock basket's clusters are things the reader assembled by accident, a
 thematic fund *is* a cluster already, and two of them either overlap or do not.
+
+## Look-through
+
+Funds with a holdings list carry a chevron in the Ranks view. Tapping it opens
+the fund's top holdings resolved against the stock universe — each name's rank
+and score, following the metric switch, so what you read there is the number the
+stock list would show. The row itself still selects into the basket; only the
+chevron looks through. (That is why a row is a `div` with `role="button"` rather
+than a `<button>`: a button inside a button is not valid HTML, and the keyboard
+behaviour is restored by hand.)
+
+The view leads with the gap it exists to show:
+
+```
+XHS blend        +2.97
+Holdings blend   +1.08
+Holdings vol     64% vs 17%
+Listed weight    22.4% of fund
+```
+
+**A fund's score is mostly its denominator.** XHS's top ten weight out to a 60%
+return against the fund's 52% — close. Their weighted *volatility* is 64%
+against the fund's 17%. Diversification collapses the volatility of a 70-name
+book to a quarter of its average constituent's, and since the score is a return
+divided by exactly that, the fund scores +2.97 where its holdings score +1.08.
+XHS is not top of the ETF list because it holds the strongest trends — it holds
+names ranked 13th and 1,254th side by side — but because the blend is smooth. A
+stock's +2.97 and a fund's +2.97 are the same number describing different
+things, which is worth knowing when the two universes are one tap apart.
+
+Names that miss the stock universe are kept and marked rather than dropped:
+USPH and CON clear the $5 price floor but sit under the $25M median dollar
+volume line. A hole in the mapping is information about the fund's book too.
+
+Two limits are structural, and the page states both rather than implying a
+completeness it does not have. FMP's ETF-holdings endpoint answers 402
+*Restricted Endpoint* on this key, so `src/etf-holdings.js` is transcribed by
+hand and holds **top tens, not books** — XHS's ten rows are 22.4% of the fund
+and the other ~78% is unmapped, so every figure above is a sample of the largest
+positions. And weights are current while momentum is historical: a name bought
+last month is credited with a year of returns the fund did not hold through.
 
 ## Health of the list
 
