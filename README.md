@@ -151,15 +151,23 @@ A row is flagged when it correlates ≥0.60 with **any single name already
 held**; the tag names the twin and the figure (`≈.84 JPM`). Holding a
 diversified eight-name mega-cap basket flags 52 of 1,503.
 
-A second tag flags **sector concentration**: the row's sector is already ≥30%
-of the basket, with at least three names in it — below that a percentage is
-too noisy to mean anything. The tag drops its sector label when the list is
-already filtered to that sector, since the dropdown above says it. A
-diversified eight-sector basket trips neither tag.
+**Sector concentration** is a red dot with a soft glow, not a label: the row's
+sector is already ≥30% of the basket, with at least three names in it — below
+that a percentage is too noisy to mean anything. A diversified eight-sector
+basket trips neither mark.
 
-Both tags share one accent hue, the only colour on the page besides the score,
-and both carry their own number so the colour is emphasis rather than the
-message.
+## Marks
+
+Every row carries a 12px line-drawing of its sector, keyed by sector *name* so
+a rebuild that reorders the sector list cannot shuffle them. Each picks the
+most literal object in that sector's world — a chip, a broadcast dot, a
+cross, a bank, a droplet, a shopping bag, a shield, a factory, a cube, a
+house, a bolt — so they read without a legend.
+
+Two of them were redrawn after proofing at actual size: the chip started with
+eight pins that turned to mush at 12px and now has four, and Industrials was
+an eight-tooth gear that read as a *sun* and is now a factory silhouette.
+Anything meant to be legible at 12px has to be checked at 12px.
 
 ## Metrics
 

@@ -11,7 +11,39 @@ const round = (v, dp) => (Number.isFinite(v) ? Number(v.toFixed(dp)) : null);
 // of width a phone gives the company name.
 const NOISE = [
   /\s+(Class\s+[A-Z]\s+)?(Common\s+(Stock|Shares)|Ordinary\s+Shares)$/i,
-  /,?\s+(Inc\.?|Incorporated|Corp\.?|Corporation|Company|Co\.|Ltd\.?|Limited|plc|PLC|LLC|L\.P\.|N\.V\.|S\.A\.)$/,
+  /,?\s+(Inc\.?|Incorporated|Corp\.?|Corporation|Company|Co\.|Ltd\.?|Limited|plc|PLC|LLC|L\.P\.|LP|N\.V\.|S\.A\.|Holdings?|Group)$/,
+];
+
+// Long words that survive the legal-form strip and still eat the one line of
+// width a phone gives the name. Only unambiguous ones — a reader has to
+// recognise the company at a glance, so "American" stays "American".
+const SHORTEN = [
+  [/\bTechnolog(y|ies)\b/g, 'Tech'],
+  [/\bPharmaceuticals?\b/g, 'Pharma'],
+  [/\bTherapeutics\b/g, 'Thera'],
+  [/\bCommunications?\b/g, 'Comms'],
+  [/\bInternational\b/g, 'Intl'],
+  [/\bIndustries\b/g, 'Inds'],
+  [/\bIncorporated\b/g, ''],
+  [/\bLaboratories\b/g, 'Labs'],
+  [/\bManagement\b/g, 'Mgmt'],
+  [/\bManufacturing\b/g, 'Mfg'],
+  [/\bResources\b/g, 'Res'],
+  [/\bSolutions\b/g, 'Solns'],
+  [/\bServices\b/g, 'Svcs'],
+  [/\bFinancial\b/g, 'Finl'],
+  [/\bProperties\b/g, 'Props'],
+  [/\bEntertainment\b/g, 'Entmt'],
+  [/\bEnterprises\b/g, 'Entpr'],
+  [/\bInstruments\b/g, 'Instr'],
+  [/\bDevelopment\b/g, 'Devt'],
+  [/\bSemiconductors?\b/g, 'Semi'],
+  [/\bNational\b/g, 'Natl'],
+  [/\bAssociates\b/g, 'Assoc'],
+  [/\bPartners\b/g, 'Ptnrs'],
+  [/\bCommercial\b/g, 'Comml'],
+  [/\bEquipment\b/g, 'Equip'],
+  [/\bTransportation\b/g, 'Transp'],
 ];
 
 function tidyName(name) {
@@ -21,8 +53,9 @@ function tidyName(name) {
     for (const re of NOISE) out = out.replace(re, '').trim();
     if (out === before) break;
   }
+  for (const [re, to] of SHORTEN) out = out.replace(re, to);
   // Stripping "Company" off "Wells Fargo & Company" leaves a dangling ampersand.
-  return out.replace(/[,\s]*(&|and)$/i, '').replace(/[,\s]+$/, '').trim() || name;
+  return out.replace(/\s{2,}/g, ' ').replace(/[,\s]*(&|and)$/i, '').replace(/[,\s]+$/, '').trim() || name;
 }
 
 const data = JSON.parse(await readFile(new URL('../data/ranks.json', import.meta.url), 'utf8'));

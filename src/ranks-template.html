@@ -18,6 +18,8 @@
     --sel: #f2f4f7;
     --flag: #9a5b12;
     --flag-bg: #f6efe4;
+    --warn: #e0342f;
+    --warn-glow: 224, 52, 47;
 
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
   }
@@ -36,6 +38,8 @@
       --sel: #16181d;
       --flag: #e0a95c;
       --flag-bg: #221c12;
+      --warn: #ff5a52;
+      --warn-glow: 255, 90, 82;
     }
   }
 
@@ -52,9 +56,12 @@
     --sel: #16181d;
     --flag: #e0a95c;
     --flag-bg: #221c12;
+    --warn: #ff5a52;
+    --warn-glow: 255, 90, 82;
   }
 
   body {
+    margin: 0;
     background: var(--bg);
     color: var(--ink);
     font-family: var(--sans);
@@ -154,7 +161,7 @@
     display: grid;
     align-items: end;
     gap: 6px;
-    padding: 0 16px 5px;
+    padding: 0 16px 5px 0;
     border-bottom: 1px solid var(--rule-2);
   }
 
@@ -184,11 +191,15 @@
   }
 
   .head .lbl.l { text-align: left; }
+  .head.grid .lbl:first-child { text-align: center; padding-left: 6px; }
   .head button[aria-pressed="true"] { color: var(--ink); }
   .head button[aria-pressed="true"]::after { content: attr(data-dir); margin-left: 3px; }
 
-  /* ---------- rows ---------- */
-  .grid { grid-template-columns: 26px minmax(0, 1fr) 46px 50px 42px; }
+  /* ---------- rows ----------
+     The rank column runs from the row's own left edge to 42px, and the cell is
+     inset by the 6px gap, so the digits centre on 24px — exactly halfway to the
+     ticker's left edge at 48px. */
+  .grid { grid-template-columns: 42px minmax(0, 1fr) 46px 50px 42px; }
   .grid-basket { grid-template-columns: minmax(0, 1fr) 46px 46px 42px; }
 
   .list { display: flex; flex-direction: column; }
@@ -207,17 +218,21 @@
     display: grid;
     align-items: center;
     gap: 6px;
-    padding: 9px 16px;
+    padding: 9px 16px 9px 0;
     min-height: 46px;
   }
+
+  /* two classes, so this beats .row's shorthand rather than racing it */
+  .row.grid-basket { padding-left: 16px; }
 
   .row[aria-pressed="true"] { background: var(--sel); }
 
   .rank {
-    font-size: 10.5px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     color: var(--muted);
-    text-align: right;
+    text-align: center;
+    padding-left: 6px;
   }
 
   .row[aria-pressed="true"] .rank { color: var(--ink-2); font-weight: 600; }
@@ -251,7 +266,31 @@
     min-width: 0;
   }
 
-  /* Flags are the one place a second hue appears. Both carry their own number,
+  /* Sector mark: identity, so it stays in the muted ink of the line it sits on. */
+  .sub svg {
+    flex: 0 0 auto;
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    stroke-width: 1.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    opacity: .85;
+  }
+
+  /* Sector concentration: a dot, not a label. Small enough to cost nothing,
+     lit enough to catch the eye on either ground. */
+  .dot {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--warn);
+    box-shadow: 0 0 0 2px rgba(var(--warn-glow), .16), 0 0 7px 1px rgba(var(--warn-glow), .55);
+  }
+
+  /* Flags are the one place a second hue appears. They carry their own number,
      so the colour is emphasis rather than the message. */
   .sub em {
     flex: 0 0 auto;
@@ -499,6 +538,38 @@
 
   const SECTORS = DATA.sectors;
   const ABBR = DATA.abbr;
+
+  /* One 12px line-drawing per sector, keyed by name so a rebuild reordering the
+     sector list cannot shuffle them. Each picks the most literal object in that
+     sector's world rather than an abstract mark, so it reads without a legend. */
+  const GLYPH = {
+    "Technology":             "M3.1 3.1h5.8v5.8H3.1z M6 1.1v2 M6 8.9v2 M1.1 6h2 M8.9 6h2",
+    "Communication Services": "M3.4 8.6a3.6 3.6 0 010-5.2 M8.6 3.4a3.6 3.6 0 010 5.2 M6 5.2a.8.8 0 100 1.6.8.8 0 000-1.6z",
+    "Healthcare":             "M6 2.2v7.6 M2.2 6h7.6",
+    "Financial Services":     "M1.8 4.9L6 2.3l4.2 2.6 M1.8 9.9h8.4 M3.5 5.6v3.5 M6 5.6v3.5 M8.5 5.6v3.5",
+    "Energy":                 "M6 1.7c2.1 2.6 3.1 4.1 3.1 5.5a3.1 3.1 0 11-6.2 0c0-1.4 1-2.9 3.1-5.5z",
+    "Consumer Cyclical":      "M2.7 4.3h6.6l-.6 6.1H3.3z M4.5 4.3V3.3a1.5 1.5 0 013 0v1",
+    "Consumer Defensive":     "M6 1.7l3.7 1.4v3.1c0 2.3-1.6 3.6-3.7 4.4-2.1-.8-3.7-2.1-3.7-4.4V3.1z",
+    "Industrials":            "M1.8 10.2V6.1l2.7 2V6.1l2.7 2V2.6h2.9v7.6z",
+    "Basic Materials":        "M6 1.7l4.1 2.3v4L6 10.3 1.9 8V4z M1.9 4L6 6.3 10.1 4 M6 6.3v4",
+    "Real Estate":            "M1.5 6L6 2.4l4.5 3.6 M3 5.6v4.6h6V5.6",
+    "Utilities":              "M6.9 1.6L3.2 6.9h2.5l-.6 3.5 4-5.4H6.4z",
+  };
+
+  function glyphFor(sector) {
+    const d = GLYPH[sector];
+    if (!d) return null;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 12 12");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    t.textContent = sector;
+    svg.append(t);
+    return svg;
+  }
   const stocks = DATA.stocks.map((s, i) => ({ ...s, i, sector: SECTORS[s.k] }));
   const N = stocks.length;
   const T = 52; // weekly returns per correlation vector
@@ -740,6 +811,8 @@
 
     const sub = document.createElement("span");
     sub.className = "sub";
+    const mark = glyphFor(s.sector);
+    if (mark) sub.append(mark);
     const nm = document.createElement("i");
     nm.textContent = s.name;
     sub.append(nm);
@@ -755,13 +828,13 @@
 
     const share = sectorShare.get(s.k);
     if (share !== undefined) {
-      const em = document.createElement("em");
-      // The sector name is redundant once the list is filtered to it.
       const pct = Math.round(share * 100) + "%";
-      em.textContent = state.sector === s.sector ? pct : ABBR[s.k] + " " + pct;
-      em.title = `${pct} of the basket is already ${s.sector}`;
-      em.setAttribute("aria-label", `${pct} of the basket is already ${s.sector}`);
-      sub.append(em);
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.title = `${pct} of the basket is already ${s.sector}`;
+      dot.setAttribute("role", "img");
+      dot.setAttribute("aria-label", `${pct} of the basket is already ${s.sector}`);
+      sub.append(dot);
     }
     id.append(tkr, sub);
     b.append(id);
@@ -925,7 +998,7 @@
     "Each score is a window's annualised log return over its own annualised volatility. Blend is the mean " +
     "of 12-1 and 6-1; switching the metric switches score, ret and vol together. Basket weights are 1/vol " +
     "on the blend, normalised. \u2248 flags a name correlating " + CORR_FLAG.toFixed(2) + "+ with a single holding, on 52 " +
-    "weekly returns; the sector tag flags one already at " + Math.round(SECTOR_FLAG * 100) + "%+ of the basket " +
+    "weekly returns; a red dot flags a sector already at " + Math.round(SECTOR_FLAG * 100) + "%+ of the basket " +
     "(min " + SECTOR_MIN + " names). US common stock on NYSE/Nasdaq/AMEX, $5+ and $25M+ median daily dollar " +
     "volume; preferreds, units and duplicate share classes removed. Not investment advice.";
 
