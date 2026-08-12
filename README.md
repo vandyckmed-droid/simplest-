@@ -115,6 +115,7 @@ in one list, ranked on the blend. No industry buckets, no per-row charts.
 
 ```
 npm run ranks        # refresh prices, rescore, regenerate dist/ranks.html
+npm run test:hrp     # check the allocator against cases with known answers
 ```
 
 ## The universe
@@ -135,21 +136,34 @@ units, and lists every share class separately. The cleaner:
 4. requires price ≥ $5 and ≥ $25M median daily dollar volume over 63 sessions,
    plus a full 12-1 window of history.
 
-3,504 cleaned lines in, **1,511** out.
+3,504 cleaned lines in, **1,517** out.
 
 ## Correlation
 
-Each name ships 52 standardised weekly log returns, quantised to int8 and
-base64'd — 72 characters per stock. The page re-centres and re-normalises on
-decode, so the dot product of any two vectors *is* their correlation; no
-matrix is precomputed and any pair can be evaluated on demand. `src/ranks-build.js`
-checks the quantised vectors against exact correlations on every run and
-reports the error (currently max |Δρ| ≈ 0.009, mean ≈ 0.002 — far below the
-0.70 flag threshold).
+Each name ships the most recent **252 daily log returns**, centred, scaled to
+unit length and quantised to int8 — 336 characters per stock. The page
+re-centres and re-normalises on decode, so the dot product of any two vectors
+*is* their correlation; no matrix is precomputed and any pair can be evaluated
+on demand. Multiply a vector by the name's `sd` and the return series comes
+back, which is what the HRP covariance is built from — the ρ a row displays and
+the ρ the allocator clusters on are the same number.
+
+The int8 scale is per-name rather than fixed. Only the vector's shape survives
+decoding, so the right scale is the largest one that clips nothing; a fixed
+scale has to be set low enough for the worst crash day in the universe and
+wastes resolution on everything else. `src/ranks-build.js` checks the quantised
+vectors against exact correlations on every run: max |Δρ| ≈ 0.004, mean ≈ 0.001.
 
 A row is flagged when it correlates ≥0.60 with **any single name already
-held**; the tag names the twin and the figure (`≈.84 JPM`). Holding a
-diversified eight-name mega-cap basket flags 52 of 1,503.
+held**; the tag names the twin and the figure (`≈.84 XOM`). Holding a
+diversified eight-name mega-cap basket flags 27 of 1,517.
+
+That is fewer than the 52 the old weekly vectors flagged, because daily
+correlations run lower than weekly ones — aggregating to weeks averages out
+idiosyncratic noise and lifts every pair. Against the daily distribution 0.60 is
+well into the tail: the universe's median pairwise ρ is 0.11 and the 95th
+percentile is 0.39. Dropping the threshold to 0.55 would flag 47 and 0.50 would
+flag 71, if the mark is wanted more often.
 
 **Sector concentration** is a red dot with a soft glow, not a label: the row's
 sector is already ≥30% of the basket, with at least three names in it — below
@@ -198,18 +212,102 @@ from its own tab, and it persists in localStorage.
 
 ## Weights
 
-The basket weights inversely to volatility: `w_i ∝ 1/σ_i`, normalised to 100%.
-Sector counts, average score, weighted volatility and the largest single
-weight sit above the holdings.
+Three schemes, switched in Settings; the basket re-weights immediately.
+
+| | |
+|---|---|
+| **Equal** | `1/n` |
+| **Inv vol** | `w ∝ 1/σ`, on the blended volatility the Vol column shows |
+| **HRP** | hierarchical risk parity — below |
+
+Equal and inverse-vol size off a number already on screen, so both stay
+checkable with a pencil. HRP cannot be: it needs the whole covariance matrix.
+
+Sector counts, average score, weighted volatility and the largest single weight
+sit above the holdings.
+
+### HRP
+
+```
+252 daily returns -> sample covariance -> Ledoit-Wolf shrinkage
+  -> correlation distance -> average-linkage tree -> quasi-diagonalisation
+  -> recursive bisection -> 10% cap -> normalise
+```
+
+The point is that a crowded cluster gets sized as one bet. Inverse-vol hands
+eight semis eight positions' worth of the book; HRP makes them compete with each
+other first, and only their total competes with the rest. On a basket of eight
+tech names plus four utilities the tech share falls from 62% to 52%; on five
+energy plus five tech, energy falls from 62% to 51%. On a basket with no cluster
+structure it lands within a point of inverse-vol, which is the correct answer
+there.
+
+Shrinkage is Ledoit & Wolf's constant-correlation estimator, with the intensity
+derived analytically rather than tuned: 252 observations across N names give a
+sample covariance whose smallest eigenvalues are badly biased, and that is
+exactly what an optimiser leans on. HRP never inverts the matrix, so a
+near-singular sample degrades the answer instead of detonating it.
+
+Two steps depart from López de Prado's published algorithm, both settled by
+measurement against the real universe rather than by preference — `npm run
+test:hrp` pins the behaviour:
+
+- **Splits halve by position, not at the dendrogram's merge points.** Splitting
+  where the tree splits sounds strictly better and is much worse. Inside a group
+  with no real structure the tree is decided by noise, and an unbalanced tree
+  makes weights decay geometrically — six statistically identical names came out
+  between 1.9% and 26.8%, and three semis with the same 60% volatility landed on
+  0.1%, 0.2% and 0.3%. Scoring cuts by how well they separate the two sides
+  fixes the synthetic case and fails the real one: on live correlations it
+  latches onto structure that is not there, reaching a 293:1 spread and pushing
+  a single-sector basket from 28.9% to 37% in its top name. Tightening the test
+  far enough to be safe just turns it back into positional halving.
+- **Branches split on inverse volatility, where the paper uses inverse
+  variance.** Inverse variance is a minimum-variance step, not a risk-parity
+  one; equalising two branches' risk contribution calls for `w ∝ 1/σ`. Measured,
+  the variance version piles into whatever is quietest — an eight-name mega-cap
+  basket came out 44.5% in one name at a 31:1 spread, against 28.9% and 5.5:1 —
+  while diversifying no better.
+
+The trade the first choice makes: positional halving only lands on a cluster
+boundary when the boundary is near a midpoint, so a small tight cluster inside a
+larger basket is de-concentrated less than a balanced one. That is the price of
+not inventing structure, and it is the cheaper of the two errors.
+
+The **10% cap** applies above ten names. Ten names under a 10% cap can only be
+equal-weighted and nine cannot meet it at all, so below eleven the cap is left
+off rather than quietly flattening the basket. Overflow is pushed onto the names
+still under the cap in proportion to what they already hold, repeating, since
+absorbing overflow can lift a name over the line itself.
+
+## Display
+
+Weights read as **percent** or as **cash** — the dollars each holding needs in a
+hypothetical $10,000 book, which is what the `$10K` column header names. Both
+are apportioned by largest remainder so the column sums to exactly 100% or
+exactly $10,000; rounding each row on its own lands near the total but not on
+it, and a column of weights is a thing readers add up.
 
 ## Layout
 
 ```
 src/universe.js          screener output -> tradeable common stock
-src/ranks-build.js       universe -> prices -> scores + corr vectors -> data/ranks.json
-src/ranks-template.html  the page; __DATA__ is the injection point
-src/ranks-render.js      inlines the JSON, writes dist/ranks.html
+src/ranks-build.js       universe -> prices -> scores + return vectors -> data/ranks.json
+src/hrp.js               shrinkage, clustering, bisection, cap — no DOM, no imports
+src/hrp-test.js          npm run test:hrp
+src/ranks-template.html  the page; __DATA__ and __HRP__ are the injection points
+src/ranks-render.js      inlines the JSON and src/hrp.js, writes dist/ranks.html
 ```
+
+`src/hrp.js` is one file in two roles: a Node module the test suite can exercise
+against cases with known answers, and the page's allocator, inlined verbatim
+with only its export line stripped. The renderer fails the build if either
+injection point survives or an export leaks through.
+
+Carrying 252 daily returns per name instead of 52 weekly ones takes
+`dist/ranks.html` from 359 KB to 810 KB. That is the whole cost of HRP: the
+allocator needs a covariance matrix over whatever the reader happens to pick, so
+every name has to arrive with its return series.
 
 ---
 
@@ -250,9 +348,13 @@ Names come from the theme list rather than the fund's legal name: SMH is
 Baskets are **per universe**, in separate localStorage keys — switching to funds
 does not mix ETFs into a stock basket or empty it. The correlation and
 concentration flags work identically within each. Among funds they are blunt by
-nature: holding XLK, SMH and IGV flags 19 of 86, with AIQ≈XLK at 0.96,
-SKYY≈IGV at 0.93 and QTUM≈SMH at 0.91 — thematic tech funds overlap heavily,
+nature: holding XLK, SMH and IGV flags 28 of 86, with AIQ≈XLK at 0.95,
+QTUM≈SMH at 0.92 and SKYY≈IGV at 0.91 — thematic tech funds overlap heavily,
 and the flag says so.
+
+HRP has correspondingly less to work with among funds than among single stocks:
+where a stock basket's clusters are things the reader assembled by accident, a
+thematic fund *is* a cluster already, and two of them either overlap or do not.
 
 ## Health of the list
 

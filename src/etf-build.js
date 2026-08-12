@@ -18,30 +18,31 @@ const MIN_BARS = 253;
 const STALE_DAYS = 10;
 const CONCURRENCY = 8;
 
-const WEEK = 5;
-const WEEKS = 52;
-const QUANT = 180;
+const WINDOW = 252;
 
 const isoDaysAgo = (d) => new Date(Date.now() - d * 864e5).toISOString().slice(0, 10);
 
 /** Identical encoding to ranks-build so the page decodes both the same way. */
-function correlationVector(closes) {
-  const samples = [];
-  for (let i = closes.length - 1; i >= 0 && samples.length <= WEEKS; i -= WEEK) samples.push(closes[i]);
-  samples.reverse();
-  if (samples.length < WEEKS + 1) return null;
+function returnVector(closes) {
+  const n = closes.length;
+  if (n < WINDOW + 1) return null;
 
+  const tail = closes.slice(n - WINDOW - 1);
   const r = [];
-  for (let i = 1; i < samples.length; i++) r.push(Math.log(samples[i] / samples[i - 1]));
+  for (let i = 1; i < tail.length; i++) r.push(Math.log(tail[i] / tail[i - 1]));
 
   const mean = r.reduce((s, x) => s + x, 0) / r.length;
   const centred = r.map((x) => x - mean);
   const norm = Math.sqrt(centred.reduce((s, x) => s + x * x, 0));
   if (!(norm > 0)) return null;
 
-  return Buffer.from(
-    centred.map((x) => Math.max(-127, Math.min(127, Math.round((x / norm) * QUANT)))),
-  ).toString('base64');
+  const unit = centred.map((x) => x / norm);
+  const peak = unit.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+
+  return {
+    b64: Buffer.from(unit.map((x) => Math.round((x * 127) / peak))).toString('base64'),
+    sd: (norm / Math.sqrt(WINDOW)) * Math.sqrt(252),
+  };
 }
 
 async function main() {
@@ -85,8 +86,8 @@ async function main() {
     const metrics = score(series);
     if (!metrics) { dropped.push(`${ticker}: unscoreable`); return null; }
 
-    const corr = correlationVector(series.map((b) => b.close));
-    if (!corr) { dropped.push(`${ticker}: no correlation vector`); return null; }
+    const vec = returnVector(series.map((b) => b.close));
+    if (!vec) { dropped.push(`${ticker}: no return vector`); return null; }
 
     const entry = ETF_UNIVERSE.get(ticker);
     return {
@@ -104,7 +105,8 @@ async function main() {
       vol12: metrics.vol12,
       vol6: metrics.vol6,
       medianDollarVolume: metrics.medianDollarVolume,
-      corr,
+      corr: vec.b64,
+      sd: vec.sd,
       lastDate: metrics.lastDate,
     };
   };

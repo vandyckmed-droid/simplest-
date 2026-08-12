@@ -242,6 +242,8 @@
      ticker's left edge at 48px. */
   .grid { grid-template-columns: 42px minmax(0, 1fr) 46px 50px 42px; }
   .grid-basket { grid-template-columns: minmax(0, 1fr) 46px 46px 42px; }
+  /* "$1,000" needs more room than "10%"; two classes, so this beats .grid-basket */
+  .grid-basket.cash { grid-template-columns: minmax(0, 1fr) 56px 44px 40px; }
 
   .list { display: flex; flex-direction: column; }
 
@@ -512,6 +514,19 @@
       <button type="button" data-universe="etfs" aria-pressed="false">ETFs</button>
     </div>
 
+    <h2>Weights</h2>
+    <div class="choice" role="group" aria-label="Weighting">
+      <button type="button" data-weight="eq" aria-pressed="false">Equal</button>
+      <button type="button" data-weight="iv" aria-pressed="true">Inv vol</button>
+      <button type="button" data-weight="hrp" aria-pressed="false" title="Hierarchical risk parity: 252-day returns, shrunk covariance, clustered, capped at 10%">HRP</button>
+    </div>
+
+    <h2>Display</h2>
+    <div class="choice" role="group" aria-label="Weight display">
+      <button type="button" data-display="pct" aria-pressed="true">Percent</button>
+      <button type="button" data-display="cash" aria-pressed="false" title="Cash needed per holding in a $10,000 portfolio">Cash</button>
+    </div>
+
     <h2>Metric</h2>
     <div class="choice" role="group" aria-label="Metric">
       <button type="button" data-metric="0" aria-pressed="true">Blend</button>
@@ -598,8 +613,14 @@
     svg.append(t);
     return svg;
   }
-  const T = 52; // weekly returns per correlation vector
+  const T = 252; // daily returns per vector — the risk basis for both ρ and HRP
 
+  /* ---------- allocator, inlined verbatim from src/hrp.js ----------
+     Kept in its own file so `npm run test:hrp` can check the maths against
+     cases with known answers; the renderer drops it in here. */
+__HRP__
+
+  const PORTFOLIO = 10000; // the hypothetical book that cash display sizes against
   const CORR_FLAG = 0.60;
   // A sector only counts as crowded once there is enough of a basket for the
   // share to mean anything.
@@ -613,11 +634,12 @@
   const rt = (s) => s.rt[state.metric];
   const vl = (s) => s.vl[state.metric];
 
-  /* ---------- correlation vectors ----------
-     Every item ships 52 standardised weekly log returns as int8. Re-centre and
+  /* ---------- return vectors ----------
+     Every item ships 252 standardised daily log returns as int8. Re-centre and
      re-normalise on decode and the dot product of two vectors is exactly their
-     correlation. Both universes use the identical encoding, so one decoder
-     serves both. */
+     correlation; multiply one by its `sd` and you have the return series back,
+     which is what the HRP covariance is built from. Both universes use the
+     identical encoding, so one decoder serves both. */
   function decodeVectors(items) {
     const N = items.length;
     const VEC = new Float32Array(N * T);
@@ -695,19 +717,24 @@
   /* ---------- state ---------- */
   const state = {
     view: "ranks", sort: "score", desc: true, q: "", sector: "",
-    metric: 0, cap: 0, universe: "stocks",
+    metric: 0, cap: 0, universe: "stocks", weight: "iv", display: "pct",
   };
 
+  const WEIGHTS = ["eq", "iv", "hrp"];
   const FILTER_KEY = "ranks-filters";
   try {
     const saved = JSON.parse(localStorage.getItem(FILTER_KEY) ?? "{}");
     if (saved.cap === 500) state.cap = 500;
     if (saved.universe && UNIVERSES[saved.universe]) state.universe = saved.universe;
+    if (WEIGHTS.includes(saved.weight)) state.weight = saved.weight;
+    if (saved.display === "cash") state.display = "cash";
   } catch {}
 
   function saveFilters() {
     try {
-      localStorage.setItem(FILTER_KEY, JSON.stringify({ cap: state.cap, universe: state.universe }));
+      localStorage.setItem(FILTER_KEY, JSON.stringify({
+        cap: state.cap, universe: state.universe, weight: state.weight, display: state.display,
+      }));
     } catch {}
   }
 
@@ -775,13 +802,40 @@
     render();
   }
 
-  /* ---------- inverse-volatility weights ---------- */
-  function weights(held) {
-    // Sizing always uses the blended volatility — the displayed metric changes
-    // what you are reading, not how the basket is built.
-    const inv = held.map((s) => 1 / Math.max(s.vl[0], 1e-6));
+  /* ---------- weights ----------
+     Three schemes over the same holdings. Equal and inverse-vol size off the
+     volatility the Vol column already shows, so both stay checkable against the
+     numbers on screen. HRP cannot be — it needs the whole covariance — so it
+     runs off the 252-day return vectors instead, which is also the window its
+     shrinkage and clustering are defined on. */
+  let hrpCache = { key: "", w: null, capBound: false, delta: 0 };
+
+  function hrpFor(rows) {
+    const key = U.key + "|" + rows.map((s) => s.symbol).join(",");
+    if (hrpCache.key !== key) {
+      const input = rows.map((s) => ({
+        u: U.vec.subarray(s.i * T, s.i * T + T),
+        sd: s.sd > 0 ? s.sd : Math.max(s.vl[0], 1e-6),
+      }));
+      const out = hrpWeights(input);
+      hrpCache = { key, w: out.w, capBound: out.capBound, delta: out.delta };
+    }
+    return hrpCache;
+  }
+
+  function weights(rows) {
+    const n = rows.length;
+    if (!n) return [];
+    if (state.weight === "eq") return rows.map((s) => ({ s, w: 1 / n }));
+    if (state.weight === "hrp") {
+      const out = hrpFor(rows);
+      return rows.map((s, i) => ({ s, w: out.w[i] }));
+    }
+    // Sizing uses the blended volatility — the displayed metric changes what
+    // you are reading, not how the basket is built.
+    const inv = rows.map((s) => 1 / Math.max(s.vl[0], 1e-6));
     const total = inv.reduce((a, b) => a + b, 0);
-    return held.map((s, i) => ({ s, w: inv[i] / total }));
+    return rows.map((s, i) => ({ s, w: inv[i] / total }));
   }
 
   /* ---------- controls ---------- */
@@ -833,6 +887,14 @@
     b.addEventListener("click", () => { state.cap = +b.dataset.cap; saveFilters(); render(); });
   }
 
+  for (const b of document.querySelectorAll("[data-weight]")) {
+    b.addEventListener("click", () => { state.weight = b.dataset.weight; saveFilters(); render(); });
+  }
+
+  for (const b of document.querySelectorAll("[data-display]")) {
+    b.addEventListener("click", () => { state.display = b.dataset.display; saveFilters(); render(); });
+  }
+
   document.getElementById("tab-settings").addEventListener("click", () => { state.view = "settings"; render(); });
   document.getElementById("tab-ranks").addEventListener("click", () => { state.view = "ranks"; render(); });
   document.getElementById("tab-basket").addEventListener("click", () => { state.view = "basket"; render(); });
@@ -865,7 +927,7 @@
   function rowFor(s, ordinal, weight) {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "row " + (state.view === "basket" ? "grid-basket" : "grid");
+    b.className = "row " + (state.view === "basket" ? basketGrid() : "grid");
     b.setAttribute("aria-pressed", String(U.picked.has(s.symbol)));
 
     if (state.view !== "basket") {
@@ -911,7 +973,7 @@
     b.append(id);
 
     if (state.view === "basket") {
-      b.append(cell(fmtPct(weight), "score"));
+      b.append(cell(weight, "score"));
       b.append(cell(fmtScore(sc(s)), "", sign(sc(s))));
       b.append(cell(fmtPct(vl(s))));
     } else {
@@ -985,6 +1047,15 @@
     const w = weights(rows);
     w.sort((a, b) => sc(b.s) - sc(a.s));
 
+    // Whole percents or whole dollars, apportioned so the column sums to
+    // exactly 100% or exactly $10,000 — a column of weights is a thing readers
+    // add up, and rounding each row on its own does not land on the total.
+    const cash = state.display === "cash";
+    const parts = apportion(w.map((x) => x.w), cash ? PORTFOLIO : 100);
+    const fmtWeight = (i) => (cash ? "$" + parts[i].toLocaleString("en-US") : parts[i] + "%");
+    let top = 0;
+    for (let i = 1; i < w.length; i++) if (w[i].w > w[top].w) top = i;
+
     const avgScore = rows.reduce((t, s) => t + sc(s), 0) / rows.length;
     const wVol = w.reduce((t, x) => t + x.w * x.s.vl[0], 0);
     const line = (k, v) => {
@@ -999,18 +1070,20 @@
     };
     line("Avg " + METRICS[state.metric].toLowerCase(), fmtScore(avgScore));
     line("Weighted vol", fmtPct(wVol));
-    line("Largest weight", fmtPct(Math.max(...w.map((x) => x.w))));
+    line("Largest weight", fmtWeight(top));
 
     const counts = new Map();
     for (const it of rows) counts.set(it.group, (counts.get(it.group) ?? 0) + 1);
     for (const [name, n] of [...counts].sort((a, b) => b[1] - a[1])) line(name, n);
 
     const head = document.createElement("div");
-    head.className = "head grid-basket";
+    head.className = "head " + basketGrid();
     head.style.paddingLeft = "0";
     head.style.paddingRight = "0";
     head.style.marginTop = "16px";
-    for (const [text, cls] of [["Holdings", "lbl l"], ["Wt", "lbl"], ["Score", "lbl"], ["Vol", "lbl"]]) {
+    // "$10K" names the unit and the base the cash figures are sized against, in
+    // the four characters the column already has.
+    for (const [text, cls] of [["Holdings", "lbl l"], [cash ? "$10K" : "Wt", "lbl"], ["Score", "lbl"], ["Vol", "lbl"]]) {
       const el = document.createElement("span");
       el.className = cls;
       el.textContent = text;
@@ -1020,9 +1093,11 @@
     sum.append(head);
 
     const frag = document.createDocumentFragment();
-    for (const { s, w: wt } of w) frag.append(rowFor(s, 0, wt));
+    w.forEach((x, i) => frag.append(rowFor(x.s, 0, fmtWeight(i))));
     list.append(frag);
   }
+
+  const basketGrid = () => "grid-basket" + (state.display === "cash" ? " cash" : "");
 
   function renderSettings() {
     document.getElementById("meta").hidden = true;
@@ -1047,6 +1122,12 @@
     }
     for (const b of document.querySelectorAll("[data-cap]")) {
       b.setAttribute("aria-pressed", String(+b.dataset.cap === state.cap));
+    }
+    for (const b of document.querySelectorAll("[data-weight]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.weight === state.weight));
+    }
+    for (const b of document.querySelectorAll("[data-display]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.display === state.display));
     }
     // A fund has assets, not a capitalisation — the cutoff has nothing to rank.
     document.getElementById("cap-head").hidden = !U.hasCap;
