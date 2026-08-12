@@ -3,7 +3,7 @@
 Every tradeable US stock — 1,517 after cleaning — plus 89 thematic ETFs, in one
 list, ranked on volatility-adjusted 12-1 and 6-1 momentum. Tap to build a
 basket; it sizes itself equally or by inverse volatility, in percent or in
-cash. Output is a single self-contained HTML page built for a phone — 243 KB,
+cash. Output is a single self-contained HTML page built for a phone — 267 KB,
 no network requests.
 
 ```
