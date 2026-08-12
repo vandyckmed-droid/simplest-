@@ -424,6 +424,31 @@
   /* ---------- basket summary ---------- */
   .sum { padding: 4px 16px 0; }
 
+  /* Actions read as text with a rule under them — the same vocabulary as the
+     column headers, rather than a pair of filled buttons the design has
+     nowhere else. */
+  .acts {
+    display: flex;
+    gap: 18px;
+    padding: 8px 0 2px;
+  }
+
+  .acts button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 3px 0;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+    box-shadow: inset 0 -1.5px 0 var(--rule-2);
+  }
+
+  .acts button:hover { box-shadow: inset 0 -1.5px 0 var(--ink); }
+  .acts button.quiet { color: var(--muted); }
+
   .sum-row {
     display: flex;
     justify-content: space-between;
@@ -654,6 +679,46 @@
   }
   const PORTFOLIO = 10000; // the hypothetical book that cash display sizes against
   const PAGE = 120;
+  const T = 252; // daily returns per vector
+
+  /* ---------- basket filler, inlined verbatim from src/select.js ----------
+     Kept in its own file so `npm run test:select` can check it against both
+     synthetic cases and the live universe; the renderer drops it in here. */
+__SELECT__
+
+  /* ---------- return vectors ----------
+     Every item ships 252 standardised daily log returns as int8. Re-centre and
+     re-normalise on decode and the dot product of two vectors is exactly their
+     correlation. Both universes use the identical encoding, so one decoder
+     serves both. */
+  function decodeVectors(items) {
+    const N = items.length;
+    const VEC = new Float32Array(N * T);
+    const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const idx = new Uint8Array(128);
+    for (let i = 0; i < 64; i++) idx[B64.charCodeAt(i)] = i;
+
+    for (let s = 0; s < N; s++) {
+      const str = items[s].c;
+      const off = s * T;
+      let out = 0;
+      for (let i = 0; i + 3 < str.length && out < T; i += 4) {
+        const n = (idx[str.charCodeAt(i)] << 18) | (idx[str.charCodeAt(i + 1)] << 12) |
+                  (idx[str.charCodeAt(i + 2)] << 6) | idx[str.charCodeAt(i + 3)];
+        for (const byte of [(n >> 16) & 255, (n >> 8) & 255, n & 255]) {
+          if (out < T) VEC[off + out++] = byte > 127 ? byte - 256 : byte;
+        }
+      }
+      let mean = 0;
+      for (let t = 0; t < T; t++) mean += VEC[off + t];
+      mean /= T;
+      let ss = 0;
+      for (let t = 0; t < T; t++) { VEC[off + t] -= mean; ss += VEC[off + t] * VEC[off + t]; }
+      const norm = Math.sqrt(ss) || 1;
+      for (let t = 0; t < T; t++) VEC[off + t] /= norm;
+    }
+    return VEC;
+  }
 
   /**
    * Whole units that sum to exactly `total` — largest remainder, so 100% of a
@@ -732,6 +797,7 @@
       groupLabel: src.groupLabel,
       groups: src.groups,
       hasCap: src.hasCap,
+      vec: decodeVectors(src.items),
       asOf: src.asOf ?? DATA.asOf,
     };
   }
@@ -809,6 +875,30 @@
     const inv = rows.map((s) => 1 / Math.max(vl(s), 1e-6));
     const total = inv.reduce((a, b) => a + b, 0);
     return rows.map((s, i) => ({ s, w: inv[i] / total }));
+  }
+
+  /* ---------- filling the basket ----------
+     The pool is the list as displayed, so an active sector, cap or window
+     filter narrows what can be added. Names already held seed the walk: they
+     constrain what comes next without being offered again. */
+  function fillBasket() {
+    const pool = selected().filter((s) => !U.picked.has(s.symbol)).slice(0, POOL);
+    const owned = held();
+    if (owned.length >= WANT || !pool.length) return;
+
+    const candidates = [...owned, ...pool];
+    const rows = candidates.map((s) => ({ u: U.vec.subarray(s.i * T, s.i * T + T) }));
+    const { picked } = fill(rows, { want: WANT, held: owned.map((_, k) => k) });
+    for (const k of picked) U.picked.add(candidates[k].symbol);
+
+    save();
+    render();
+  }
+
+  function clearBasket() {
+    U.picked.clear();
+    save();
+    render();
   }
 
   /* ---------- controls ---------- */
@@ -1024,15 +1114,16 @@
     sum.textContent = "";
     list.textContent = "";
 
+    sum.hidden = false;
+    sum.append(basketActions(rows.length));
+
     if (!rows.length) {
-      sum.hidden = true;
       const p = document.createElement("p");
       p.className = "empty";
-      p.textContent = "Tap a row in Ranks to add it.";
+      p.textContent = "Tap a row in Ranks to add it, or fill it from the list.";
       list.append(p);
       return;
     }
-    sum.hidden = false;
 
     const w = weights(rows);
     w.sort((a, b) => sc(b.s) - sc(a.s));
@@ -1109,6 +1200,31 @@
   }
 
   const basketGrid = () => "grid-basket" + (state.display === "cash" ? " cash" : "");
+
+  /** Fill and Clear, above the summary. Fill hides once the basket is full. */
+  function basketActions(count) {
+    const bar = document.createElement("div");
+    bar.className = "acts";
+    if (count < WANT) {
+      const f = document.createElement("button");
+      f.type = "button";
+      f.id = "act-fill";
+      f.textContent = count ? `Fill to ${WANT}` : `Fill ${WANT}`;
+      f.title = `Walk the ${U.label.toLowerCase()} list from the top, taking names whose mean correlation to the basket stays under ${AVG} and that duplicate nothing already held`;
+      f.addEventListener("click", fillBasket);
+      bar.append(f);
+    }
+    if (count) {
+      const c = document.createElement("button");
+      c.type = "button";
+      c.id = "act-clear";
+      c.className = "quiet";
+      c.textContent = "Clear";
+      c.addEventListener("click", clearBasket);
+      bar.append(c);
+    }
+    return bar;
+  }
 
 
   /* ---------- look-through ----------

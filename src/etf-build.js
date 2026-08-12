@@ -11,7 +11,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dailyAdjusted, pooled } from './fmp.js';
-import { blendAt, DEFAULT_SKIP, score } from './momentum.js';
+import { blendAt, DEFAULT_SKIP, returnVector, score } from './momentum.js';
 import { ETF_THEMES, ETF_TICKERS, ETF_UNIVERSE } from './etf-universe.js';
 
 const MIN_BARS = 253;
@@ -61,6 +61,9 @@ async function main() {
     const metrics = score(series);
     if (!metrics) { dropped.push(`${ticker}: unscoreable`); return null; }
 
+    const vec = returnVector(series.map((b) => b.close));
+    if (!vec) { dropped.push(`${ticker}: no return vector`); return null; }
+
     const entry = ETF_UNIVERSE.get(ticker);
     return {
       symbol: ticker,
@@ -70,6 +73,8 @@ async function main() {
       rt: metrics.rt,
       vl: metrics.vl,
       composite: blendAt(metrics.rt, metrics.vl, DEFAULT_SKIP),
+      corr: vec.b64,
+      sd: vec.sd,
       medianDollarVolume: metrics.medianDollarVolume,
       lastDate: metrics.lastDate,
     };

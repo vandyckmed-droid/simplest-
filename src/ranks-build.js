@@ -5,7 +5,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dailyAdjusted, pooled, screener } from './fmp.js';
-import { blendAt, DEFAULT_SKIP, score } from './momentum.js';
+import { blendAt, DEFAULT_SKIP, returnVector, score } from './momentum.js';
 import { clean } from './universe.js';
 
 const MIN_PRICE = 5;
@@ -72,6 +72,9 @@ async function main() {
     if (!metrics) return null;
     if (metrics.medianDollarVolume < MIN_MEDIAN_DOLLAR_VOLUME) return null;
 
+    const vec = returnVector(series.map((b) => b.close));
+    if (!vec) return null;
+
     return {
       symbol: row.symbol,
       name: row.companyName,
@@ -88,6 +91,10 @@ async function main() {
       // one month skipped. The page re-ranks positionally when either edge of
       // the window moves.
       composite: blendAt(metrics.rt, metrics.vl, DEFAULT_SKIP),
+      // The basket filler needs correlations, so every name carries its own
+      // standardised return series.
+      corr: vec.b64,
+      sd: vec.sd,
       lastDate: metrics.lastDate,
     };
   };

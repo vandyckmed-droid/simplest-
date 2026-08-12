@@ -3,8 +3,8 @@
 Every tradeable US stock — 1,517 after cleaning — plus 89 thematic ETFs, in one
 list, ranked on volatility-adjusted 12-1 and 6-1 momentum. Tap to build a
 basket; it sizes itself equally or by inverse volatility, in percent or in
-cash. Output is a single self-contained HTML page built for a phone — 267 KB,
-no network requests.
+cash, or fill itself. Output is a single self-contained HTML page built for a
+phone — 809 KB, no network requests.
 
 ```
 npm run build        # refresh prices, rescore, regenerate dist/ranks.html
@@ -177,12 +177,10 @@ src/ranks-render.js      inlines the JSON, writes dist/ranks.html
 network requests, and it renders in light or dark according to the viewer's
 theme.
 
-It used to carry 252 daily log returns per name, quantised to int8 and base64'd,
-because a hierarchical-risk-parity allocator and an "already represented" flag
-both needed a covariance matrix over whatever the reader happened to pick. Both
-are gone, and with them 71% of the page. The builds no longer compute the
-vectors either, so restoring any of it means a fresh `npm run data` against the
-API rather than a re-render. Git has the lot.
+It carries 252 daily log returns per name, quantised to int8 and base64'd, so
+the basket filler can compute correlations over whatever the reader is looking
+at. That is 570 KB of the page — the whole cost of selecting on correlation
+rather than on rank alone.
 
 What the page does carry per name is six annualised returns and six
 volatilities — every skip against every lookback — because the reader moves both

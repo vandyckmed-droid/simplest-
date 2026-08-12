@@ -109,3 +109,41 @@ export function blendAt(rt, vl, skip) {
   }
   return total / LOOKBACKS.length;
 }
+
+/** Days of daily returns behind the correlation vector the page ships. */
+export const VECTOR_WINDOW = 252;
+
+/**
+ * The most recent `VECTOR_WINDOW` daily log returns, centred, scaled to unit
+ * length and quantised to int8. The page re-centres and re-normalises on
+ * decode, so the dot product of two decoded vectors is the pair's correlation.
+ *
+ * The int8 scale is per-name rather than fixed: only the vector's shape
+ * survives decoding, so the right scale is the largest one that clips nothing.
+ * A fixed scale has to be set low enough for the worst crash day in the
+ * universe and wastes resolution on everything else.
+ */
+export function returnVector(closes) {
+  const n = closes.length;
+  if (n < VECTOR_WINDOW + 1) return null;
+
+  const tail = closes.slice(n - VECTOR_WINDOW - 1);
+  const r = [];
+  for (let i = 1; i < tail.length; i++) r.push(Math.log(tail[i] / tail[i - 1]));
+
+  const mean = r.reduce((s, x) => s + x, 0) / r.length;
+  const centred = r.map((x) => x - mean);
+  const norm = Math.sqrt(centred.reduce((s, x) => s + x * x, 0));
+  if (!(norm > 0)) return null;
+
+  const unit = centred.map((x) => x / norm);
+  const peak = unit.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+
+  return {
+    b64: Buffer.from(unit.map((x) => Math.round((x * 127) / peak))).toString('base64'),
+    exact: unit,
+    // Annualised volatility over exactly this window, so the vector and the
+    // scalar that turns it back into returns describe one stretch of tape.
+    sd: (norm / Math.sqrt(VECTOR_WINDOW)) * Math.sqrt(TRADING_DAYS_PER_YEAR),
+  };
+}
