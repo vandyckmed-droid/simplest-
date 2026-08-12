@@ -56,6 +56,7 @@ const compact = {
     symbol: s.symbol,
     name: tidyName(s.name),
     k: sectorIndex.get(s.sector) ?? 0,
+    m: Math.round(s.marketCap / 1e6), // $M; the page ranks on it for the cap filter
     // [blend, 12-1, 6-1] for each of score, return and volatility, so the
     // metric switch moves all three columns together.
     sc: [round(s.composite, 2), round(s.score12_1, 2), round(s.score6_1, 2)],

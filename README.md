@@ -168,6 +168,21 @@ alternative leaves two of the three columns describing a different window than
 the one you selected. Weights always size on blended volatility: changing the
 displayed metric changes what you are reading, not how the basket is built.
 
+## Filters
+
+A third tab, currently holding one control: **market cap**, `All` or
+`Top 500`. "Top 500 largest" is stored as a *rank*, not a dollar line — an
+absolute threshold drifts as the market moves, a rank does not. The page ranks
+every name by market cap once at load and the filter is `capRank <= 500`
+(currently $16.7B and up).
+
+Filters decide who is listed, never what anything scores: the momentum blend
+is computed against the whole universe and does not move. The rank column is
+positional, so it renumbers — under `Top 500` the list runs 1…500 with SNDK
+at #1 on the same +2.98 it carries unfiltered. An active filter is tagged
+beside the count in the header, so it is visible from the list rather than only
+from its own tab, and it persists in localStorage.
+
 ## Weights
 
 The basket weights inversely to volatility: `w_i ∝ 1/σ_i`, normalised to 100%.

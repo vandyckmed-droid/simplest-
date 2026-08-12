@@ -324,6 +324,56 @@
     font-size: 12px;
   }
 
+  /* ---------- filters panel ---------- */
+  .fgroup { padding: 4px 16px 0; }
+
+  .fgroup h2 {
+    margin: 18px 0 8px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .choice { display: flex; gap: 14px; align-items: center; }
+
+  .choice button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 2px 0;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .choice button[aria-pressed="true"] {
+    color: var(--ink);
+    box-shadow: inset 0 -1.5px 0 var(--ink);
+  }
+
+  .fnote {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  /* an active filter has to be visible from the list, not only from its tab */
+  .title em {
+    font-style: normal;
+    font-weight: 600;
+    font-size: 9.5px;
+    color: var(--flag);
+    background: var(--flag-bg);
+    border-radius: 3px;
+    padding: 1.5px 4px;
+    margin-right: 6px;
+  }
+
   /* ---------- basket summary ---------- */
   .sum { padding: 4px 16px 0; }
 
@@ -424,6 +474,15 @@
     </div>
   </header>
 
+  <div class="fgroup" id="filters-panel" hidden>
+    <h2>Market cap</h2>
+    <div class="choice" role="group" aria-label="Market cap cutoff">
+      <button type="button" data-cap="0" aria-pressed="true">All</button>
+      <button type="button" data-cap="500" aria-pressed="false">Top 500</button>
+    </div>
+    <p class="fnote" id="cap-note"></p>
+  </div>
+
   <div class="sum" id="sum" hidden></div>
   <main class="list" id="list"></main>
   <p class="note" id="note"></p>
@@ -432,6 +491,7 @@
 <nav class="tabs">
   <button type="button" id="tab-ranks" aria-pressed="true">Ranks</button>
   <button type="button" id="tab-basket" aria-pressed="false">Basket</button>
+  <button type="button" id="tab-filters" aria-pressed="false">Filters</button>
 </nav>
 
 <script>
@@ -494,6 +554,22 @@
     return d;
   }
 
+  /* ---------- market-cap ranking ----------
+     "Top 500 largest" is a rank, not a dollar line: an absolute threshold
+     drifts as the market moves, a rank does not. */
+  const capRank = new Int32Array(N);
+  {
+    const order = stocks.map((s) => s.i).sort((a, b) => stocks[b].m - stocks[a].m);
+    order.forEach((idx, i) => { capRank[idx] = i + 1; });
+  }
+  const capCutoffValue = (n) => {
+    const at = stocks.find((s) => capRank[s.i] === Math.min(n, N));
+    return at ? at.m : 0;
+  };
+
+  const fmtCap = (m) => (m >= 1e6 ? "$" + (m / 1e6).toFixed(1) + "T"
+    : m >= 1e3 ? "$" + (m / 1e3).toFixed(1) + "B" : "$" + m + "M");
+
   /* ---------- state ---------- */
   const WL_KEY = "ranks-basket";
   const picked = new Set();
@@ -501,7 +577,17 @@
     for (const t of JSON.parse(localStorage.getItem(WL_KEY) ?? "[]")) picked.add(t);
   } catch {}
 
-  const state = { view: "ranks", sort: "score", desc: true, q: "", sector: "", metric: 0 };
+  const state = { view: "ranks", sort: "score", desc: true, q: "", sector: "", metric: 0, cap: 0 };
+
+  const FILTER_KEY = "ranks-filters";
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTER_KEY) ?? "{}");
+    if (saved.cap === 500) state.cap = 500;
+  } catch {}
+
+  function saveFilters() {
+    try { localStorage.setItem(FILTER_KEY, JSON.stringify({ cap: state.cap })); } catch {}
+  }
 
   // Highest correlation between each stock and anything currently held. Kept as
   // an array so rows can be flagged without recomputing per render.
@@ -601,6 +687,11 @@
     });
   }
 
+  for (const b of document.querySelectorAll("[data-cap]")) {
+    b.addEventListener("click", () => { state.cap = +b.dataset.cap; saveFilters(); render(); });
+  }
+
+  document.getElementById("tab-filters").addEventListener("click", () => { state.view = "filters"; render(); });
   document.getElementById("tab-ranks").addEventListener("click", () => { state.view = "ranks"; render(); });
   document.getElementById("tab-basket").addEventListener("click", () => { state.view = "basket"; render(); });
 
@@ -609,6 +700,9 @@
 
   function selected() {
     let out = stocks;
+    // Filters only decide who is listed; scores are computed against the whole
+    // universe and never move. The rank is positional, so it renumbers.
+    if (state.cap) out = out.filter((s) => capRank[s.i] <= state.cap);
     if (state.sector) out = out.filter((s) => s.sector === state.sector);
     if (state.q) {
       out = out.filter((s) =>
@@ -688,8 +782,14 @@
 
   function renderRanks() {
     const rows = selected();
-    document.getElementById("asof").textContent =
-      rows.length.toLocaleString() + " · " + DATA.asOf;
+    const asof = document.getElementById("asof");
+    asof.textContent = "";
+    if (state.cap) {
+      const tag = document.createElement("em");
+      tag.textContent = "TOP " + state.cap;
+      asof.append(tag);
+    }
+    asof.append(rows.length.toLocaleString() + " · " + DATA.asOf);
 
     const list = document.getElementById("list");
     list.textContent = "";
@@ -717,8 +817,7 @@
 
   function renderBasket() {
     const held = stocks.filter((s) => picked.has(s.symbol));
-    document.getElementById("asof").textContent =
-      held.length ? held.length + " names" : "";
+    document.getElementById("asof").textContent = held.length ? held.length + " names" : "";
 
     const sum = document.getElementById("sum");
     const list = document.getElementById("list");
@@ -777,15 +876,31 @@
     list.append(frag);
   }
 
+  function renderFilters() {
+    document.getElementById("asof").textContent = "";
+    document.getElementById("cap-note").textContent = state.cap
+      ? `Showing the ${state.cap} largest, ${fmtCap(capCutoffValue(state.cap))} and up — ${(N - state.cap).toLocaleString()} smaller names hidden. Scores are unchanged; ranks renumber.`
+      : `All ${N.toLocaleString()} names, down to ${fmtCap(capCutoffValue(N))}.`;
+    document.getElementById("list").textContent = "";
+  }
+
   function render() {
-    const basket = state.view === "basket";
-    document.getElementById("heading").textContent = basket ? "Basket" : "Ranks";
-    document.getElementById("filters").hidden = basket;
-    document.getElementById("metric").hidden = basket;
-    document.getElementById("head").hidden = basket;
-    document.getElementById("sum").hidden = !basket;
-    document.getElementById("tab-ranks").setAttribute("aria-pressed", String(!basket));
-    document.getElementById("tab-basket").setAttribute("aria-pressed", String(basket));
+    const view = state.view;
+    const list = view === "ranks";
+    document.getElementById("heading").textContent =
+      view === "basket" ? "Basket" : view === "filters" ? "Filters" : "Ranks";
+    document.getElementById("filters").hidden = !list;
+    document.getElementById("metric").hidden = !list;
+    document.getElementById("head").hidden = !list;
+    document.getElementById("sum").hidden = view !== "basket";
+    document.getElementById("filters-panel").hidden = view !== "filters";
+    document.getElementById("tab-ranks").setAttribute("aria-pressed", String(list));
+    document.getElementById("tab-basket").setAttribute("aria-pressed", String(view === "basket"));
+    document.getElementById("tab-filters").setAttribute("aria-pressed", String(view === "filters"));
+
+    for (const b of document.querySelectorAll("[data-cap]")) {
+      b.setAttribute("aria-pressed", String(+b.dataset.cap === state.cap));
+    }
 
     for (const b of document.querySelectorAll("[data-metric]")) {
       b.setAttribute("aria-pressed", String(+b.dataset.metric === state.metric));
@@ -801,7 +916,8 @@
     document.getElementById("tab-basket").textContent =
       picked.size ? `Basket · ${picked.size}` : "Basket";
 
-    if (basket) renderBasket();
+    if (view === "basket") renderBasket();
+    else if (view === "filters") renderFilters();
     else renderRanks();
   }
 
