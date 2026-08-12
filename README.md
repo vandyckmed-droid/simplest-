@@ -1,15 +1,18 @@
-# Momentum Desk
+# Ranks
 
-A cross-sectional momentum screener over large, liquid US stocks, grouped by
-industry and ranked on volatility-adjusted 12-1 and 6-1 returns. Output is a
-single self-contained HTML page designed for a phone: a Robinhood-style dark
-ranked list with a group dropdown, a distribution strip, and a tap-to-build
-equal-weight watchlist.
+Every tradeable US stock — 1,517 after cleaning — plus 89 thematic ETFs, in one
+list, ranked on volatility-adjusted 12-1 and 6-1 momentum. Tap to build a
+basket; it weights itself by hierarchical risk parity and flags names the
+basket already represents. Output is a single self-contained HTML page built
+for a phone.
 
 ```
-npm run build        # refresh prices, rescore, regenerate dist/index.html
-npm run data         # just src/build.js  -> data/screener.json
-npm run render       # just src/render.js -> dist/index.html
+npm run build        # refresh prices, rescore, regenerate dist/ranks.html
+npm run data         # stocks only    -> data/ranks.json
+npm run etfs         # funds only     -> data/etfs.json
+npm run render       # inline + write -> dist/ranks.html
+npm run etf:check    # is every fund in the list still trading?
+npm run test:hrp     # check the allocator against cases with known answers
 ```
 
 `API_KEY` must hold a Financial Modeling Prep key. Everything targets FMP's
@@ -27,8 +30,8 @@ closes:
 | **6-1** | 126 trading days ago → 21 trading days ago |
 
 Both skip the most recent month. That gap is standard in momentum work: the
-last few weeks of a stock's return tend to mean-revert, so including them
-mixes a reversal signal into a momentum one.
+last few weeks of a stock's return tend to mean-revert, so including them mixes
+a reversal signal into a momentum one.
 
 Each window produces:
 
@@ -42,81 +45,7 @@ score      = annReturn / annVol
 Numerator and denominator describe the identical stretch of tape, so the score
 is a Sharpe-like, unitless number — comparable across the two horizons despite
 their different lengths, and across names with very different volatility. The
-**blend** that drives the default ranking is the plain average of the two
-scores.
-
-## The page
-
-- Group dropdown (native select in a pill), `Blend / 12-1 / 6-1` sort, a
-  direction toggle, and search over ticker and company.
-- A summary strip per filter: median score, best name, share positive, count,
-  and a distribution histogram.
-- Each row: rank, ticker, the ranked score, and a micro-line with a
-  colour-coded sector chip (TECH, HLTH, FIN, …) and the company name — no
-  per-row bars, no drawer. Sign reads from the explicit +/− on every figure.
-- **Watchlist**: tapping a row adds or removes it; selection persists in
-  localStorage. A fixed bottom bar shows the count, the default equal weight
-  per name (1/n), and the equal-weighted average blend; `WL` filters the list
-  to the selection, `Clear` empties it. In the WL view the score histogram
-  gives way to sector count bars — how many names each sector contributes,
-  in that sector's hue.
-- Single-theme Robinhood-style dark: true black, green #00c805 / red #ff5000.
-  That pair is deutan-confusable, so sign always has a redundant channel
-  (bar direction and an explicit +/− on every figure).
-
-## The universe
-
-FMP's own industry taxonomy has ~130 entries, and only five of them contain 25
-or more US companies above $3B in market cap — far too granular to fill
-25-name buckets. `src/industry-groups.js` folds those industries into 22
-GICS-style **industry groups**, which is coarse enough to rank within and much
-finer than the 11-sector level. Each stock still carries its original FMP
-industry in data/screener.json, though the page itself no longer displays it.
-
-Per group, selection runs:
-
-1. US-listed common stock, actively trading, market cap ≥ $2B, non-ETF/fund.
-2. Take the 34 largest by market cap as candidates.
-3. Drop anything without a full 12-1 window of history, or with median daily
-   dollar volume below $15M over the last 63 sessions.
-4. Keep the top 25 by market cap, then rank those on the signal.
-
-Size and liquidity are entry requirements only — they never enter the ranking.
-Two groups (Pharmaceuticals, Consumer Finance & Payments) come up a few names
-short because the underlying industries simply do not contain 25 qualifying
-large caps; the rest hit 25.
-
-## Layout
-
-```
-src/industry-groups.js   FMP industry -> industry group, plus chip abbreviations
-src/fmp.js               /stable client: retries, bounded concurrency
-src/momentum.js          the windowing and scoring math
-src/build.js             universe -> prices -> scores -> data/screener.json
-src/template.html        the page; __DATA__ is the injection point
-src/render.js            inlines the JSON, writes dist/index.html
-```
-
-`dist/index.html` is fully self-contained — the data is embedded, there are no
-network requests, and it renders in light or dark according to the viewer's
-theme.
-
-## Caveats
-
-Momentum is a statistical tendency measured on past prices. Nothing produced
-here is a forecast or investment advice.
-
----
-
-# Ranks
-
-A second, simpler page: every tradeable US name that clears a liquidity floor,
-in one list, ranked on the blend. No industry buckets, no per-row charts.
-
-```
-npm run ranks        # refresh prices, rescore, regenerate dist/ranks.html
-npm run test:hrp     # check the allocator against cases with known answers
-```
+**blend** that drives the default ranking is the plain average of the two.
 
 ## The universe
 
@@ -219,15 +148,19 @@ Anything meant to be legible at 12px has to be checked at 12px.
 `Blend / 12-1 / 6-1`, in Settings, switches score, return **and** volatility
 together — the alternative leaves two of the three columns describing a
 different window than the one you selected. The active metric names the score
-column, so it stays visible from the list. Weights always size on blended volatility: changing the
-displayed metric changes what you are reading, not how the basket is built.
+column, so it stays visible from the list.
+
+The switch looks like it ought to be redundant and is not: only **12 of the top
+25** names are shared between Blend and 12-1 (28 of 50, 57 of 100), and 12-1 and
+6-1 rank-correlate 0.673. Three genuinely different lists, for the 64 KB the
+extra two cost.
 
 ## Settings
 
-A third tab holding both controls that change what the list shows: the
-**metric** switch and a **market cap** cutoff. Neither lives in the Ranks
-header — that keeps the list itself to a search box, a sector dropdown and the
-column headers.
+A third tab, holding everything that changes what the list shows or how the
+basket is built: **universe**, **weights**, **display**, **metric** and a
+**market cap** cutoff. None of it lives in the Ranks header — that keeps the
+list itself to a search box, a sector dropdown and the column headers.
 
 "Top 500 largest" is stored as a *rank*, not a dollar line — an absolute
 threshold drifts as the market moves, a rank does not. The page ranks every
@@ -243,19 +176,23 @@ from its own tab, and it persists in localStorage.
 
 ## Weights
 
-Three schemes, switched in Settings; the basket re-weights immediately.
+Two schemes, switched in Settings; the basket re-weights immediately. **Equal**
+is `1/n`. **HRP** is hierarchical risk parity, below.
 
-| | |
-|---|---|
-| **Equal** | `1/n` |
-| **Inv vol** | `w ∝ 1/σ`, on the blended volatility the Vol column shows |
-| **HRP** | hierarchical risk parity — below |
+There used to be a third, inverse volatility, and it earned its place from
+neither end: absent cluster structure HRP lands within a point or two of it
+(effective-bets ratio 0.812 against 0.827 across 300 random baskets, spread 5.7
+against 5.2), and where the two differ HRP is the better answer. What was lost
+is that inverse-vol could be checked by hand against the Vol column; Equal still
+can.
 
-Equal and inverse-vol size off a number already on screen, so both stay
-checkable with a pencil. HRP cannot be: it needs the whole covariance matrix.
-
-Sector counts, average score, weighted volatility and the largest single weight
-sit above the holdings.
+Above the holdings sit the average score, the weighted volatility, the largest
+single weight, and one row of sector marks with counts. That row used to be one
+row *per* sector — eleven of them on a fourteen-name basket, which put the first
+holding below the fold. The marks are the ones already on every row, so the
+tally needs no legend, and each pair binds tight and separates wide: at an even
+spacing, Healthcare's cross beside its count reads as "+1" — one more — rather
+than one healthcare name.
 
 ### HRP
 
@@ -328,6 +265,8 @@ src/hrp.js               shrinkage, clustering, bisection, cap, overlap — no D
 src/hrp-test.js          npm run test:hrp
 src/ranks-template.html  the page; __DATA__ and __HRP__ are the injection points
 src/etf-holdings.js      hand-kept top holdings per fund, resolved at render time
+src/etf-universe.js      the thematic fund list, as ordered groups
+src/momentum.js          the windowing and scoring math, shared by both builds
 src/ranks-render.js      inlines the JSON and src/hrp.js, writes dist/ranks.html
 ```
 
@@ -390,8 +329,8 @@ thematic fund *is* a cluster already, and two of them either overlap or do not.
 
 ## Look-through
 
-Funds with a holdings list carry a chevron in the Ranks view. Tapping it opens
-the fund's top holdings resolved against the stock universe — each name's rank
+Funds with a holdings list carry a chevron at the end of their name line.
+Tapping it opens the fund's top holdings resolved against the stock universe — each name's rank
 and score, following the metric switch, so what you read there is the number the
 stock list would show. The row itself still selects into the basket; only the
 chevron looks through. (That is why a row is a `div` with `role="button"` rather

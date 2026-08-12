@@ -241,10 +241,6 @@
      inset by the 6px gap, so the digits centre on 24px — exactly halfway to the
      ticker's left edge at 48px. */
   .grid { grid-template-columns: 42px minmax(0, 1fr) 46px 50px 42px; }
-  /* ETF mode carries a look-through affordance, so every fund row reserves the
-     column — otherwise the numbers would shift between funds that have holdings
-     and funds that do not. */
-  .grid-peek { grid-template-columns: 42px minmax(0, 1fr) 46px 50px 42px 18px; }
   .grid-hold { grid-template-columns: 42px minmax(0, 1fr) 46px 46px; }
   .grid-basket { grid-template-columns: minmax(0, 1fr) 46px 46px 42px; }
   /* "$1,000" needs more room than "10%"; two classes, so this beats .grid-basket */
@@ -275,14 +271,16 @@
   /* Holdings rows are a readout, not a control. */
   .row.static { cursor: default; }
 
-  /* The look-through: a chevron drawn in rules, sized as a real tap target
-     while occupying 18px of column. */
+  /* The look-through: a chevron drawn in rules, sitting on the name line so it
+     costs no column. Vertical padding gives it a real tap target without
+     changing the row's height. */
   .peek {
     appearance: none;
     border: 0;
     background: transparent;
-    padding: 12px 4px 12px 8px;
-    margin: -12px -4px -12px -8px;
+    flex: 0 0 auto;
+    padding: 11px 6px;
+    margin: -11px -2px;
     cursor: pointer;
     line-height: 0;
   }
@@ -453,8 +451,41 @@
   }
 
   .sum-row:last-child { border-bottom: 0; }
-  .sum-row span:first-child { color: var(--muted); }
+  .sum-row span:first-child { color: var(--muted); white-space: nowrap; }
   .sum-row span:last-child { font-variant-numeric: tabular-nums; }
+
+  /* Sector counts as marks rather than a stack of named rows: on a fourteen-name
+     basket that was eleven rows, so the first holding sat below the fold. The
+     glyphs are the ones already on every row, so the tally needs no legend. */
+  /* Pairs bind tight and separate wide, so each mark reads as owning the number
+     beside it. Healthcare's mark is a cross, and at an even spacing its entry
+     reads as "+1" — one more — rather than one healthcare name. */
+  .tally {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .tally b {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+
+  .tally svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    stroke-width: 1.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    opacity: .8;
+  }
 
   .sec-head {
     font-size: 9px;
@@ -536,8 +567,7 @@
     <h2>Weights</h2>
     <div class="choice" role="group" aria-label="Weighting">
       <button type="button" data-weight="eq" aria-pressed="false">Equal</button>
-      <button type="button" data-weight="iv" aria-pressed="true">Inv vol</button>
-      <button type="button" data-weight="hrp" aria-pressed="false" title="Hierarchical risk parity: 252-day returns, shrunk covariance, clustered, capped at 10%">HRP</button>
+      <button type="button" data-weight="hrp" aria-pressed="true" title="Hierarchical risk parity: 252-day returns, shrunk covariance, clustered, capped at 10%">HRP</button>
     </div>
 
     <h2>Display</h2>
@@ -1157,7 +1187,6 @@ function apportion(weights, total) {
       groupLabel: src.groupLabel,
       groups: src.groups,
       hasCap: src.hasCap,
-      hasHoldings: src.items.some((it) => it.h),
       asOf: src.asOf ?? DATA.asOf,
       vec: decodeVectors(src.items),
       // Share of each item already spanned by the basket, kept as an array so
@@ -1168,17 +1197,18 @@ function apportion(weights, total) {
   /* ---------- state ---------- */
   const state = {
     view: "ranks", sort: "score", desc: true, q: "", sector: "",
-    metric: 0, cap: 0, universe: "stocks", weight: "iv", display: "pct",
+    metric: 0, cap: 0, universe: "stocks", weight: "hrp", display: "pct",
     peek: null,
   };
 
-  const WEIGHTS = ["eq", "iv", "hrp"];
+  const WEIGHTS = ["eq", "hrp"];
   const FILTER_KEY = "ranks-filters";
   try {
     const saved = JSON.parse(localStorage.getItem(FILTER_KEY) ?? "{}");
     if (saved.cap === 500) state.cap = 500;
     if (saved.universe && UNIVERSES[saved.universe]) state.universe = saved.universe;
-    if (WEIGHTS.includes(saved.weight)) state.weight = saved.weight;
+    if (saved.weight === "iv") state.weight = "hrp"; // the setting it replaced
+    else if (WEIGHTS.includes(saved.weight)) state.weight = saved.weight;
     if (saved.display === "cash") state.display = "cash";
   } catch {}
 
@@ -1250,11 +1280,10 @@ function apportion(weights, total) {
   }
 
   /* ---------- weights ----------
-     Three schemes over the same holdings. Equal and inverse-vol size off the
-     volatility the Vol column already shows, so both stay checkable against the
-     numbers on screen. HRP cannot be — it needs the whole covariance — so it
-     runs off the 252-day return vectors instead, which is also the window its
-     shrinkage and clustering are defined on. */
+     Two schemes: the naive one and the risk-aware one. Inverse volatility sat
+     between them and earned its place from neither end — absent cluster
+     structure HRP lands within a point or two of it, and where they differ HRP
+     is the better answer. */
   let hrpCache = { key: "", w: null, capBound: false, delta: 0 };
 
   function hrpFor(rows) {
@@ -1274,15 +1303,8 @@ function apportion(weights, total) {
     const n = rows.length;
     if (!n) return [];
     if (state.weight === "eq") return rows.map((s) => ({ s, w: 1 / n }));
-    if (state.weight === "hrp") {
-      const out = hrpFor(rows);
-      return rows.map((s, i) => ({ s, w: out.w[i] }));
-    }
-    // Sizing uses the blended volatility — the displayed metric changes what
-    // you are reading, not how the basket is built.
-    const inv = rows.map((s) => 1 / Math.max(s.vl[0], 1e-6));
-    const total = inv.reduce((a, b) => a + b, 0);
-    return rows.map((s, i) => ({ s, w: inv[i] / total }));
+    const out = hrpFor(rows);
+    return rows.map((s, i) => ({ s, w: out.w[i] }));
   }
 
   /* ---------- controls ---------- */
@@ -1379,7 +1401,7 @@ function apportion(weights, total) {
     const b = document.createElement("div");
     b.setAttribute("role", "button");
     b.tabIndex = 0;
-    b.className = "row " + (state.view === "basket" ? basketGrid() : listGrid());
+    b.className = "row " + (state.view === "basket" ? basketGrid() : "grid");
     b.setAttribute("aria-pressed", String(U.picked.has(s.symbol)));
 
     if (state.view !== "basket") {
@@ -1418,6 +1440,17 @@ function apportion(weights, total) {
       dot.setAttribute("aria-label", label);
       sub.append(dot);
     }
+    // The row selects; the chevron looks through.
+    if (s.h && state.view !== "basket") {
+      const peek = document.createElement("button");
+      peek.type = "button";
+      peek.className = "peek";
+      peek.title = `${s.symbol} holdings`;
+      peek.setAttribute("aria-label", `Show ${s.symbol} holdings`);
+      peek.addEventListener("click", (e) => { e.stopPropagation(); openHoldings(s.symbol); });
+      sub.append(peek);
+    }
+
     id.append(tkr, sub);
     b.append(id);
 
@@ -1430,21 +1463,6 @@ function apportion(weights, total) {
       b.append(cell(fmtPct(rt(s))));
       b.append(cell(fmtPct(vl(s))));
 
-      // The row selects; the chevron looks through. Funds without a holdings
-      // list still get the empty cell so the columns stay put.
-      if (U.hasHoldings) {
-        if (s.h) {
-          const peek = document.createElement("button");
-          peek.type = "button";
-          peek.className = "peek";
-          peek.title = `${s.symbol} holdings`;
-          peek.setAttribute("aria-label", `Show ${s.symbol} holdings`);
-          peek.addEventListener("click", (e) => { e.stopPropagation(); openHoldings(s.symbol); });
-          b.append(peek);
-        } else {
-          b.append(document.createElement("span"));
-        }
-      }
     }
 
     b.addEventListener("click", () => toggle(s.symbol));
@@ -1542,9 +1560,30 @@ function apportion(weights, total) {
     line("Weighted vol", fmtPct(wVol));
     line("Largest weight", fmtWeight(top));
 
+    // One row, marks descending by count. The names are on the holdings below
+    // and the marks match them, so spelling each out was eleven rows of repeat.
     const counts = new Map();
     for (const it of rows) counts.set(it.group, (counts.get(it.group) ?? 0) + 1);
-    for (const [name, n] of [...counts].sort((a, b) => b[1] - a[1])) line(name, n);
+    const ordered = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+    const row = document.createElement("div");
+    row.className = "sum-row";
+    const key = document.createElement("span");
+    key.textContent = ordered.length + (U.key === "etfs" ? " themes" : " sectors");
+    const tally = document.createElement("span");
+    tally.className = "tally";
+    for (const [name, n] of ordered) {
+      const cell = document.createElement("b");
+      const mark = glyphFor(name);
+      if (mark) cell.append(mark);
+      const num = document.createElement("span");
+      num.textContent = n;
+      cell.append(num);
+      cell.title = `${name}: ${n}`;
+      tally.append(cell);
+    }
+    row.append(key, tally);
+    sum.append(row);
 
     const head = document.createElement("div");
     head.className = "head " + basketGrid();
@@ -1568,7 +1607,7 @@ function apportion(weights, total) {
   }
 
   const basketGrid = () => "grid-basket" + (state.display === "cash" ? " cash" : "");
-  const listGrid = () => (U.hasHoldings ? "grid-peek" : "grid");
+
 
   /* ---------- look-through ----------
      A fund's top holdings, resolved against the stock universe. Rank and score
@@ -1699,9 +1738,7 @@ function apportion(weights, total) {
     document.getElementById("heading").textContent =
       view === "basket" ? "Basket" : view === "settings" ? "Settings" : peek ? state.peek : "Ranks";
     document.getElementById("seek").hidden = !list;
-    const head = document.getElementById("head");
-    head.hidden = !list;
-    head.className = "head " + listGrid();
+    document.getElementById("head").hidden = !list;
     document.getElementById("sum").hidden = !(view === "basket" || peek);
     document.getElementById("settings-panel").hidden = view !== "settings";
     // The look-through is reached from Ranks and returns there, so the Ranks

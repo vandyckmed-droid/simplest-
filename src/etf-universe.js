@@ -239,35 +239,23 @@ export const ETF_UNIVERSE = (() => {
 
 export const ETF_TICKERS = [...ETF_UNIVERSE.keys()];
 
-/**
- * What `npm run etf:check` found on 2026-08-12, kept here so the next person to
- * pick this up does not rediscover it. Re-run the check before building on it.
- *
- * 89 of 93 funds score cleanly. The four that do not are listed as given rather
- * than quietly swapped out — the list is the user's, and a silent substitution
- * is worse than a known gap.
- */
-export const ETF_ISSUES = {
-  VPN: {
-    problem: 'quotes but returns no adjusted history',
-    detail: 'Global X renamed it "Data Center REITs & Digital Infrastructure"; it trades ~25k shares a day.',
-    suggested: 'DTCR — Global X Data Center & Digital Infrastructure, ~674k shares a day, same theme',
-  },
-  PBS: {
-    problem: 'quotes but returns no adjusted history',
-    detail: 'Invesco Dynamic Media, ~2k shares a day — effectively untradeable.',
-    suggested: null,
-  },
-  BJK: { problem: 'stopped trading', detail: 'last bar 2026-05-18', suggested: null },
-  EATZ: { problem: 'stopped trading', detail: 'last bar 2026-05-07', suggested: null },
-};
-
-/**
- * Liquidity here is nothing like the stock side. Median daily dollar volume runs
- * from NERD at under $0.1M to SMH at $6.5B, and the $25M floor that governs the
- * stock universe would delete 39 of the 89 scoreable funds — including most of
- * the thematic ones the list exists for. ETF mode needs its own floor.
- *
- * Survivors by floor: $1M → 76, $5M → 62, $25M → 50.
- */
-export const ETF_LIQUIDITY_NOTE = 'thematic funds are thin; pick a floor near $1M, not $25M';
+// What `npm run etf:check` found on 2026-08-12, kept here so the next person to
+// pick this up does not rediscover it. Re-run the check before building on it.
+//
+// 89 of 93 funds score cleanly. The four that do not are listed as given rather
+// than quietly swapped out — the list is the user's, and a silent substitution
+// is worse than a known gap.
+//
+//   VPN   quotes but returns no adjusted history. Global X renamed it "Data
+//         Center REITs & Digital Infrastructure"; ~25k shares a day. DTCR
+//         covers the same theme at ~674k shares a day.
+//   PBS   quotes but returns no adjusted history. Invesco Dynamic Media,
+//         ~2k shares a day — effectively untradeable.
+//   BJK   stopped trading; last bar 2026-05-18.
+//   EATZ  stopped trading; last bar 2026-05-07.
+//
+// Liquidity here is nothing like the stock side. Median daily dollar volume runs
+// from NERD at under $0.1M to SMH at $6.5B, and the $25M floor that governs the
+// stock universe would delete 39 of the 89 scoreable funds — including most of
+// the thematic ones the list exists for. Survivors by floor: $1M -> 76,
+// $5M -> 62, $25M -> 50. ETF mode therefore applies no floor at all.

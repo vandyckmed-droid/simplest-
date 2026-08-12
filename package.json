@@ -1,20 +1,16 @@
 {
-  "name": "momentum-screener",
+  "name": "ranks",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Volatility-adjusted 12-1 / 6-1 momentum screener over large, liquid US stocks by industry group",
+  "description": "Volatility-adjusted momentum ranking over every tradeable US stock, with HRP basket weighting",
   "scripts": {
-    "build": "node src/build.js && node src/render.js",
-    "data": "node src/build.js",
-    "render": "node src/render.js",
-    "ranks": "node src/ranks-build.js && node src/etf-build.js && node src/ranks-render.js",
-    "ranks:data": "node src/ranks-build.js",
-    "ranks:render": "node src/ranks-render.js",
     "etf:check": "node src/etf-check.js",
-    "etf": "node src/etf-build.js && node src/ranks-render.js",
-    "etf:data": "node src/etf-build.js",
-    "test:hrp": "node src/hrp-test.js"
+    "test:hrp": "node src/hrp-test.js",
+    "build": "node src/ranks-build.js && node src/etf-build.js && node src/ranks-render.js",
+    "data": "node src/ranks-build.js",
+    "etfs": "node src/etf-build.js",
+    "render": "node src/ranks-render.js"
   },
   "engines": {
     "node": ">=20"
