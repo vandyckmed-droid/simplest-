@@ -129,8 +129,6 @@ const compact = {
         k: sectorIndex.get(s.sector) ?? 0,
         m: Math.round(s.marketCap / 1e6), // $M; the page ranks on it for the cap filter
         ...triples(s),
-        c: s.corr, // base64 return vector
-        sd: round(s.sd, 4), // 252-day annualised vol; scales the vector back to returns
       })),
     },
     etfs: {
@@ -146,8 +144,6 @@ const compact = {
         name: f.name, // the theme label, not the fund's legal name
         k: themeIndex.get(f.theme) ?? 0,
         ...triples(f),
-        c: f.corr,
-        sd: round(f.sd, 4),
         h: holdingsFor(f.symbol), // [symbol, weight %, stock index or -1]
       })),
     },
@@ -156,19 +152,10 @@ const compact = {
 
 const template = await readFile(new URL('ranks-template.html', import.meta.url), 'utf8');
 
-// The allocator lives in its own file so `npm run test:hrp` can exercise it in
-// Node; the page needs the same source inline. Only the export line has to go —
-// everything above it is plain functions with no imports.
-const hrp = (await readFile(new URL('hrp.js', import.meta.url), 'utf8'))
-  .replace(/^export \{[^}]*\};?[ \t]*$/m, '');
-if (/^\s*export\b/m.test(hrp)) throw new Error('src/hrp.js still has an export after stripping');
-
 // `</script` inside a string literal would close the host script element early.
 const json = JSON.stringify(compact).replaceAll('</', '<\\/');
-const html = template
-  .replace('__HRP__', () => hrp)
-  .replace('__DATA__', () => json);
-if (html.includes('__HRP__') || html.includes('__DATA__')) throw new Error('an injection point was not replaced');
+const html = template.replace('__DATA__', () => json);
+if (html.includes('__DATA__')) throw new Error('the injection point was not replaced');
 
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
 await writeFile(new URL('../dist/ranks.html', import.meta.url), html);

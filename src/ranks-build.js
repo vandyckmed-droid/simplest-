@@ -18,53 +18,10 @@ const MIN_MARKET_CAP = 1e8;
 const MIN_BARS = 253;
 const CONCURRENCY = 10;
 
-// Risk basis: the most recent 252 daily log returns. This one vector serves
-// both the correlation flag and the HRP covariance, so the ρ a row displays and
-// the ρ the allocator clusters on are the same number.
-const WINDOW = 252;
-
 function isoDaysAgo(days) {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
-}
-
-/**
- * The most recent `WINDOW` daily log returns, centred, scaled to unit length
- * and quantised to int8. The page re-centres and re-normalises on decode, so
- * the dot product of two decoded vectors is the pair's correlation, and
- * multiplying a vector by `sd` reconstructs the return series the covariance
- * needs — one 336-character string does both jobs.
- *
- * The int8 scale is per-name rather than fixed. Only the vector's *shape*
- * survives decoding, so the right scale is the largest one that clips nothing:
- * a fixed scale has to be set low enough for the worst crash day in the
- * universe, which wastes resolution on everything else.
- */
-function returnVector(closes) {
-  const n = closes.length;
-  if (n < WINDOW + 1) return null;
-
-  const tail = closes.slice(n - WINDOW - 1);
-  const r = [];
-  for (let i = 1; i < tail.length; i++) r.push(Math.log(tail[i] / tail[i - 1]));
-
-  const mean = r.reduce((s, x) => s + x, 0) / r.length;
-  const centred = r.map((x) => x - mean);
-  const norm = Math.sqrt(centred.reduce((s, x) => s + x * x, 0));
-  if (!(norm > 0)) return null;
-
-  const unit = centred.map((x) => x / norm);
-  const peak = unit.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
-  const scale = 127 / peak;
-
-  return {
-    b64: Buffer.from(unit.map((x) => Math.round(x * scale))).toString('base64'),
-    exact: unit,
-    // Annualised volatility over exactly this window, so the covariance the
-    // allocator builds and the returns it is built from describe one stretch.
-    sd: (norm / Math.sqrt(WINDOW)) * Math.sqrt(252),
-  };
 }
 
 async function main() {
@@ -115,9 +72,6 @@ async function main() {
     if (!metrics) return null;
     if (metrics.medianDollarVolume < MIN_MEDIAN_DOLLAR_VOLUME) return null;
 
-    const vec = returnVector(series.map((b) => b.close));
-    if (!vec) return null;
-
     return {
       symbol: row.symbol,
       name: row.companyName,
@@ -140,12 +94,6 @@ async function main() {
       annRet6_1: metrics.annRet6_1,
       vol12: metrics.vol12,
       vol6: metrics.vol6,
-      medianDollarVolume: metrics.medianDollarVolume,
-      corr: vec.b64,
-      corrExact: vec.exact,
-      // 252-day annualised vol — the risk input, distinct from the momentum
-      // windows' vol that the Vol column shows.
-      sd: vec.sd,
       lastDate: metrics.lastDate,
     };
   };
@@ -161,11 +109,6 @@ async function main() {
 
   const stocks = scored.filter(Boolean).sort((a, b) => b.composite - a.composite);
   stocks.forEach((s, i) => { s.rank = i + 1; });
-
-  // Verify that the quantised vectors the page ships still reproduce the exact
-  // correlations closely enough for a 0.70 flag to mean what it says.
-  const err = quantisationError(stocks);
-  console.log(`\nquantisation: max |Δρ| ${err.max.toFixed(5)}, mean ${err.mean.toFixed(6)} over ${err.n} pairs`);
 
   const asOf = stocks.reduce((m, s) => (s.lastDate > m ? s.lastDate : m), '');
   const sectors = new Map();
@@ -184,11 +127,9 @@ async function main() {
       score: 'mean of the 12-1 and 6-1 volatility-adjusted momentum scores; each = annualised log return over the window / annualised daily-return volatility over the same window',
       ret: 'mean of the two windows\' annualised log returns',
       vol: 'mean of the two windows\' annualised volatilities',
-      correlation: `${WINDOW} daily log returns, standardised; page correlation = dot product of two decoded vectors`,
-      risk: `sd = annualised volatility over the same ${WINDOW} days; vector x sd reconstructs the return series the HRP covariance is built from`,
     },
     sectors: [...sectors].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
-    stocks: stocks.map(({ corrExact, ...s }) => s),
+    stocks,
   };
 
   await mkdir(new URL('../data/', import.meta.url), { recursive: true });
@@ -203,32 +144,6 @@ async function main() {
       `ret ${(s.annRet * 100).toFixed(1).padStart(7)}%  vol ${(s.annVol * 100).toFixed(1).padStart(6)}%  ${s.name}`,
     );
   }
-}
-
-/** Samples random pairs and compares decoded-vector ρ against exact ρ. */
-function quantisationError(stocks) {
-  const decode = (b64) => {
-    const buf = Buffer.from(b64, 'base64');
-    const v = Array.from(buf).map((b) => (b > 127 ? b - 256 : b));
-    const mean = v.reduce((s, x) => s + x, 0) / v.length;
-    const c = v.map((x) => x - mean);
-    const norm = Math.sqrt(c.reduce((s, x) => s + x * x, 0));
-    return c.map((x) => x / norm);
-  };
-  const dot = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0);
-
-  let max = 0, total = 0, n = 0;
-  const step = Math.max(1, Math.floor(stocks.length / 60));
-  for (let i = 0; i < stocks.length; i += step) {
-    const qi = decode(stocks[i].corr);
-    for (let j = i + 1; j < stocks.length; j += step) {
-      const d = Math.abs(dot(qi, decode(stocks[j].corr)) - dot(stocks[i].corrExact, stocks[j].corrExact));
-      max = Math.max(max, d);
-      total += d;
-      n++;
-    }
-  }
-  return { max, mean: n ? total / n : 0, n };
 }
 
 main().catch((err) => {

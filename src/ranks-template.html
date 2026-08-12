@@ -18,8 +18,6 @@
     --sel: #f2f4f7;
     --flag: #9a5b12;
     --flag-bg: #f6efe4;
-    --warn: #e0342f;
-    --warn-glow: 224, 52, 47;
 
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
   }
@@ -38,8 +36,6 @@
       --sel: #16181d;
       --flag: #e0a95c;
       --flag-bg: #221c12;
-      --warn: #ff5a52;
-      --warn-glow: 255, 90, 82;
     }
   }
 
@@ -56,8 +52,6 @@
     --sel: #16181d;
     --flag: #e0a95c;
     --flag-bg: #221c12;
-    --warn: #ff5a52;
-    --warn-glow: 255, 90, 82;
   }
 
   body {
@@ -354,17 +348,6 @@
     opacity: .85;
   }
 
-  /* Already represented: a dot, not a label. Small enough to cost nothing, lit
-     enough to catch the eye on either ground. */
-  .dot {
-    flex: 0 0 auto;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--warn);
-    box-shadow: 0 0 0 2px rgba(var(--warn-glow), .16), 0 0 7px 1px rgba(var(--warn-glow), .55);
-  }
-
   .n {
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
@@ -567,7 +550,7 @@
     <h2>Weights</h2>
     <div class="choice" role="group" aria-label="Weighting">
       <button type="button" data-weight="eq" aria-pressed="false">Equal</button>
-      <button type="button" data-weight="hrp" aria-pressed="true" title="Hierarchical risk parity: 252-day returns, shrunk covariance, clustered, capped at 10%">HRP</button>
+      <button type="button" data-weight="iv" aria-pressed="true" title="Inverse volatility: w proportional to 1/σ, on the volatility the Vol column shows">Inv vol</button>
     </div>
 
     <h2>Display</h2>
@@ -662,71 +645,29 @@
     svg.append(t);
     return svg;
   }
-  const T = 252; // daily returns per vector — the risk basis for both ρ and HRP
-
-  /* ---------- allocator, inlined verbatim from src/hrp.js ----------
-     Kept in its own file so `npm run test:hrp` can check the maths against
-     cases with known answers; the renderer drops it in here. */
-__HRP__
-
   const PORTFOLIO = 10000; // the hypothetical book that cash display sizes against
-  /* One mark, one question: is this name's behaviour already available from
-     what I hold? `spannedR2` answers it — the share of the candidate's movement
-     explained by regressing it on every holding at once. Half is the line.
-
-     Measured against the real universe, the flag rate rises with the basket
-     rather than exploding: 0.6% of names against a single holding, 0.9%
-     against eight, 5.7% against fourteen. */
-  const OVERLAP_FLAG = 0.50;
   const PAGE = 120;
+
+  /**
+   * Whole units that sum to exactly `total` — largest remainder, so 100% of a
+   * basket reads as 100 and a $10,000 portfolio adds up to $10,000. Rounding
+   * each row on its own does not, and a column of weights is a thing readers
+   * add up.
+   */
+  function apportion(weights, total) {
+    const raw = weights.map((w) => w * total);
+    const base = raw.map(Math.floor);
+    let left = Math.round(total - base.reduce((a, b) => a + b, 0));
+    const order = raw.map((v, i) => [v - base[i], i]).sort((a, b) => b[0] - a[0]);
+    for (let k = 0; k < order.length && left > 0; k++, left--) base[order[k][1]]++;
+    return base;
+  }
 
   // 0 = blend, 1 = 12-1, 2 = 6-1; the switch moves score, ret and vol together.
   const METRICS = ["Blend", "12-1", "6-1"];
   const sc = (s) => s.sc[state.metric];
   const rt = (s) => s.rt[state.metric];
   const vl = (s) => s.vl[state.metric];
-
-  /* ---------- return vectors ----------
-     Every item ships 252 standardised daily log returns as int8. Re-centre and
-     re-normalise on decode and the dot product of two vectors is exactly their
-     correlation; multiply one by its `sd` and you have the return series back,
-     which is what the HRP covariance is built from. Both universes use the
-     identical encoding, so one decoder serves both. */
-  function decodeVectors(items) {
-    const N = items.length;
-    const VEC = new Float32Array(N * T);
-    const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    const idx = new Uint8Array(128);
-    for (let i = 0; i < 64; i++) idx[B64.charCodeAt(i)] = i;
-
-    for (let s = 0; s < N; s++) {
-      const str = items[s].c;
-      const off = s * T;
-      let out = 0;
-      for (let i = 0; i + 3 < str.length && out < T; i += 4) {
-        const n = (idx[str.charCodeAt(i)] << 18) | (idx[str.charCodeAt(i + 1)] << 12) |
-                  (idx[str.charCodeAt(i + 2)] << 6) | idx[str.charCodeAt(i + 3)];
-        for (const byte of [(n >> 16) & 255, (n >> 8) & 255, n & 255]) {
-          if (out < T) VEC[off + out++] = byte > 127 ? byte - 256 : byte;
-        }
-      }
-      let mean = 0;
-      for (let t = 0; t < T; t++) mean += VEC[off + t];
-      mean /= T;
-      let ss = 0;
-      for (let t = 0; t < T; t++) { VEC[off + t] -= mean; ss += VEC[off + t] * VEC[off + t]; }
-      const norm = Math.sqrt(ss) || 1;
-      for (let t = 0; t < T; t++) VEC[off + t] /= norm;
-    }
-    return VEC;
-  }
-
-  function rho(a, b) {
-    const oa = a * T, ob = b * T;
-    let d = 0;
-    for (let t = 0; t < T; t++) d += U.vec[oa + t] * U.vec[ob + t];
-    return d;
-  }
 
   /* ---------- a universe is everything derived from one item list ----------
      Switching between stocks and funds swaps this whole object, so nothing
@@ -758,26 +699,22 @@ __HRP__
       groups: src.groups,
       hasCap: src.hasCap,
       asOf: src.asOf ?? DATA.asOf,
-      vec: decodeVectors(src.items),
-      // Share of each item already spanned by the basket, kept as an array so
-      // rows can be flagged without recomputing per render.
-      overlap: new Float32Array(N),
     };
   }
   /* ---------- state ---------- */
   const state = {
     view: "ranks", sort: "score", desc: true, q: "", sector: "",
-    metric: 0, cap: 0, universe: "stocks", weight: "hrp", display: "pct",
+    metric: 0, cap: 0, universe: "stocks", weight: "iv", display: "pct",
     peek: null,
   };
 
-  const WEIGHTS = ["eq", "hrp"];
+  const WEIGHTS = ["eq", "iv"];
   const FILTER_KEY = "ranks-filters";
   try {
     const saved = JSON.parse(localStorage.getItem(FILTER_KEY) ?? "{}");
     if (saved.cap === 500) state.cap = 500;
     if (saved.universe && UNIVERSES[saved.universe]) state.universe = saved.universe;
-    if (saved.weight === "iv") state.weight = "hrp"; // the setting it replaced
+    if (saved.weight === "hrp") state.weight = "iv"; // the setting it replaced
     else if (WEIGHTS.includes(saved.weight)) state.weight = saved.weight;
     if (saved.display === "cash") state.display = "cash";
   } catch {}
@@ -802,36 +739,11 @@ __HRP__
     state.sector = "";
     fillSectors();
     saveFilters();
-    recomputeOverlap();
     shown = PAGE;
     render();
   }
 
   const held = () => U.items.filter((it) => U.picked.has(it.symbol));
-
-  /**
-   * How much of every candidate is already in the basket. The holdings'
-   * correlation matrix is factorised once, so each candidate costs one pass to
-   * gather its correlations and O(k²) to solve.
-   */
-  function recomputeOverlap() {
-    U.overlap.fill(0);
-    const h = held();
-    if (!h.length) return;
-
-    const L = cholesky(shrunkCorrelation(h.map((s) => ({
-      u: U.vec.subarray(s.i * T, s.i * T + T),
-      sd: s.sd > 0 ? s.sd : Math.max(s.vl[0], 1e-6),
-    }))));
-
-    const at = h.map((s) => s.i);
-    const c = new Float64Array(at.length);
-    for (let i = 0; i < U.N; i++) {
-      if (U.picked.has(U.items[i].symbol)) continue; // already in; nothing to warn about
-      for (let j = 0; j < at.length; j++) c[j] = rho(i, at[j]);
-      U.overlap[i] = spannedR2(L, c, T);
-    }
-  }
 
   const fmtScore = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
   const fmtPct = (v) => (v * 100).toFixed(0) + "%";
@@ -845,36 +757,21 @@ __HRP__
     if (U.picked.has(symbol)) U.picked.delete(symbol);
     else U.picked.add(symbol);
     save();
-    recomputeOverlap();
     render();
   }
 
   /* ---------- weights ----------
-     Two schemes: the naive one and the risk-aware one. Inverse volatility sat
-     between them and earned its place from neither end — absent cluster
-     structure HRP lands within a point or two of it, and where they differ HRP
-     is the better answer. */
-  let hrpCache = { key: "", w: null, capBound: false, delta: 0 };
-
-  function hrpFor(rows) {
-    const key = U.key + "|" + rows.map((s) => s.symbol).join(",");
-    if (hrpCache.key !== key) {
-      const input = rows.map((s) => ({
-        u: U.vec.subarray(s.i * T, s.i * T + T),
-        sd: s.sd > 0 ? s.sd : Math.max(s.vl[0], 1e-6),
-      }));
-      const out = hrpWeights(input);
-      hrpCache = { key, w: out.w, capBound: out.capBound, delta: out.delta };
-    }
-    return hrpCache;
-  }
-
+     Both size off numbers already on screen, so either can be checked against
+     the list with a pencil. */
   function weights(rows) {
     const n = rows.length;
     if (!n) return [];
     if (state.weight === "eq") return rows.map((s) => ({ s, w: 1 / n }));
-    const out = hrpFor(rows);
-    return rows.map((s, i) => ({ s, w: out.w[i] }));
+    // Sizing uses the blended volatility — the displayed metric changes what
+    // you are reading, not how the basket is built.
+    const inv = rows.map((s) => 1 / Math.max(s.vl[0], 1e-6));
+    const total = inv.reduce((a, b) => a + b, 0);
+    return rows.map((s, i) => ({ s, w: inv[i] / total }));
   }
 
   /* ---------- controls ---------- */
@@ -998,18 +895,6 @@ __HRP__
       sub.append(nm);
     }
 
-    // Already represented: the one mark on a row, and it says only that.
-    if (U.overlap[s.i] >= OVERLAP_FLAG) {
-      const pct = Math.round(U.overlap[s.i] * 100);
-      const n = U.picked.size;
-      const label = `${pct}% of this name is already explained by the ${n} name${n === 1 ? "" : "s"} you hold`;
-      const dot = document.createElement("span");
-      dot.className = "dot";
-      dot.title = label;
-      dot.setAttribute("role", "img");
-      dot.setAttribute("aria-label", label);
-      sub.append(dot);
-    }
     // The row selects; the chevron looks through.
     if (s.h && state.view !== "basket") {
       const peek = document.createElement("button");
@@ -1353,6 +1238,5 @@ __HRP__
     else renderRanks();
   }
 
-  recomputeOverlap();
   render();
 </script>
