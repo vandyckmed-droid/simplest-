@@ -105,3 +105,63 @@ theme.
 
 Momentum is a statistical tendency measured on past prices. Nothing produced
 here is a forecast or investment advice.
+
+---
+
+# Ranks
+
+A second, simpler page: every tradeable US name that clears a liquidity floor,
+in one list, ranked on the blend. No industry buckets, no per-row charts.
+
+```
+npm run ranks        # refresh prices, rescore, regenerate dist/ranks.html
+```
+
+## The universe
+
+`src/universe.js` turns FMP's screener output into things you could actually
+place an order for. FMP's `country=US` filter is about domicile rather than
+listing venue, so it returns London and Toronto lines for US companies
+(`0YXG.L` is Broadcom); it also keeps preferred shares, baby bonds and SPAC
+units, and lists every share class separately. The cleaner:
+
+1. keeps NYSE / Nasdaq / AMEX only,
+2. drops `-P*`, `-U*`, `-W*`, `-R*` suffixed lines (preferreds, units,
+   warrants, rights) while keeping real share classes like `BRK-B`,
+3. collapses each company to its most liquid line — this is what removes
+   `GOOG` in favour of `GOOGL`, `BRK-A` in favour of `BRK-B`, and preferreds
+   that share a parent's name without carrying a preferred suffix
+   (`STRK` vs `MSTR`),
+4. requires price ≥ $5 and ≥ $25M median daily dollar volume over 63 sessions,
+   plus a full 12-1 window of history.
+
+3,504 cleaned lines in, **1,511** out.
+
+## Correlation
+
+Each name ships 52 standardised weekly log returns, quantised to int8 and
+base64'd — 72 characters per stock. The page re-centres and re-normalises on
+decode, so the dot product of any two vectors *is* their correlation; no
+matrix is precomputed and any pair can be evaluated on demand. `src/ranks-build.js`
+checks the quantised vectors against exact correlations on every run and
+reports the error (currently max |Δρ| ≈ 0.009, mean ≈ 0.002 — far below the
+0.70 flag threshold).
+
+A row is flagged `≈` when it correlates ≥0.70 with **any single name already
+held**. Holding JPM, XOM and BAC flags 6 of 1,508 — CVX and COP against XOM,
+WFC/C/CFG/RF against BAC. Rare by design.
+
+## Weights
+
+The basket weights inversely to volatility: `w_i ∝ 1/σ_i`, normalised to 100%.
+Sector counts, average score, weighted volatility and the largest single
+weight sit above the holdings.
+
+## Layout
+
+```
+src/universe.js          screener output -> tradeable common stock
+src/ranks-build.js       universe -> prices -> scores + corr vectors -> data/ranks.json
+src/ranks-template.html  the page; __DATA__ is the injection point
+src/ranks-render.js      inlines the JSON, writes dist/ranks.html
+```

@@ -7,7 +7,10 @@
   "scripts": {
     "build": "node src/build.js && node src/render.js",
     "data": "node src/build.js",
-    "render": "node src/render.js"
+    "render": "node src/render.js",
+    "ranks": "node src/ranks-build.js && node src/ranks-render.js",
+    "ranks:data": "node src/ranks-build.js",
+    "ranks:render": "node src/ranks-render.js"
   },
   "engines": {
     "node": ">=20"

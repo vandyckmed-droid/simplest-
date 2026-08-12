@@ -1,0 +1,708 @@
+<title>Ranks — volatility-adjusted momentum</title>
+
+<style>
+  /* One typeface, two weights, hairlines, and colour on exactly one thing:
+     the score. Neutrals carry a slight cool bias so the greys read as chosen
+     rather than default. Both themes are defined token-level, covering all
+     three viewer states (explicit light, explicit dark, unstamped system). */
+  :root {
+    --bg: #ffffff;
+    --raise: #f7f8fa;
+    --ink: #16181d;
+    --ink-2: #4a4f59;
+    --muted: #8a8f9a;
+    --rule: #e9ebef;
+    --rule-2: #d8dbe1;
+    --pos: #12784a;
+    --neg: #b03a2e;
+    --sel: #f2f4f7;
+
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0c0d10;
+      --raise: #131519;
+      --ink: #eceef2;
+      --ink-2: #b0b5be;
+      --muted: #767c87;
+      --rule: #1c1e24;
+      --rule-2: #2a2d35;
+      --pos: #46cf85;
+      --neg: #ef6f60;
+      --sel: #16181d;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0c0d10;
+    --raise: #131519;
+    --ink: #eceef2;
+    --ink-2: #b0b5be;
+    --muted: #767c87;
+    --rule: #1c1e24;
+    --rule-2: #2a2d35;
+    --pos: #46cf85;
+    --neg: #ef6f60;
+    --sel: #16181d;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.35;
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .shell {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 0 0 calc(52px + env(safe-area-inset-bottom));
+  }
+
+  .num { font-variant-numeric: tabular-nums; }
+
+  :where(button, input, select):focus-visible {
+    outline: 2px solid var(--ink-2);
+    outline-offset: -2px;
+  }
+
+  /* ---------- header ---------- */
+  .top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+  }
+
+  .title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 18px 16px 12px;
+  }
+
+  .title h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -.03em;
+  }
+
+  .title span {
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .filters {
+    display: flex;
+    gap: 10px;
+    padding: 0 16px 10px;
+  }
+
+  .filters input,
+  .filters select {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    border-bottom: 1px solid var(--rule-2);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 12.5px;
+    padding: 5px 0;
+    min-height: 30px;
+  }
+
+  .filters input { flex: 1; min-width: 0; }
+  .filters input::placeholder { color: var(--muted); }
+  .filters input::-webkit-search-cancel-button { display: none; }
+
+  .pick { position: relative; flex: 0 0 auto; max-width: 46%; }
+  .pick select { width: 100%; padding-right: 14px; text-overflow: ellipsis; }
+
+  .pick::after {
+    content: "";
+    position: absolute;
+    right: 2px;
+    top: 12px;
+    width: 5px;
+    height: 5px;
+    border-right: 1px solid var(--muted);
+    border-bottom: 1px solid var(--muted);
+    transform: rotate(45deg);
+    pointer-events: none;
+  }
+
+  /* ---------- column headers; tapping one sorts by it ---------- */
+  .head {
+    display: grid;
+    align-items: end;
+    gap: 6px;
+    padding: 0 16px 5px;
+    border-bottom: 1px solid var(--rule-2);
+  }
+
+  .head button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 4px 0;
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .head .lbl {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: 4px;
+  }
+
+  .head .lbl.l { text-align: left; }
+  .head button[aria-pressed="true"] { color: var(--ink); }
+  .head button[aria-pressed="true"]::after { content: attr(data-dir); margin-left: 3px; }
+
+  /* ---------- rows ---------- */
+  .grid { grid-template-columns: 26px minmax(0, 1fr) 46px 50px 42px; }
+  .grid-basket { grid-template-columns: minmax(0, 1fr) 46px 46px 42px; }
+
+  .list { display: flex; flex-direction: column; }
+
+  .row {
+    appearance: none;
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    display: grid;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    min-height: 46px;
+  }
+
+  .row[aria-pressed="true"] { background: var(--sel); }
+
+  .rank {
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  .row[aria-pressed="true"] .rank { color: var(--ink-2); font-weight: 600; }
+
+  .id { min-width: 0; }
+
+  .id b {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+  }
+
+  .id i {
+    display: block;
+    font-style: normal;
+    font-size: 10.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+
+  /* correlation flag: one dim glyph, never colour, with the twin named in the
+     accessible label */
+  .id b em {
+    font-style: normal;
+    font-weight: 400;
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  .n {
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--ink-2);
+  }
+
+  .n.score { font-weight: 600; color: var(--ink); }
+  .n.score[data-sign="pos"] { color: var(--pos); }
+  .n.score[data-sign="neg"] { color: var(--neg); }
+
+  .more {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+    padding: 14px;
+    cursor: pointer;
+  }
+
+  .empty {
+    padding: 48px 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  /* ---------- basket summary ---------- */
+  .sum { padding: 4px 16px 0; }
+
+  .sum-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--rule);
+    font-size: 12px;
+  }
+
+  .sum-row:last-child { border-bottom: 0; }
+  .sum-row span:first-child { color: var(--muted); }
+  .sum-row span:last-child { font-variant-numeric: tabular-nums; }
+
+  .sec-head {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 16px 16px 4px;
+    border-bottom: 1px solid var(--rule-2);
+  }
+
+  /* ---------- footer tabs ---------- */
+  .tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    background: var(--bg);
+    border-top: 1px solid var(--rule-2);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .tabs button {
+    flex: 1;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    min-height: 50px;
+    cursor: pointer;
+  }
+
+  .tabs button[aria-pressed="true"] { color: var(--ink); }
+
+  /* .filters and .head are flex/grid, which outranks the hidden attribute */
+  [hidden] { display: none !important; }
+
+  .note {
+    padding: 18px 16px 8px;
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  @media (min-width: 600px) {
+    .shell { border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); min-height: 100vh; }
+  }
+</style>
+
+<div class="shell">
+  <header class="top">
+    <div class="title">
+      <h1 id="heading">Ranks</h1>
+      <span id="asof"></span>
+    </div>
+
+    <div class="filters" id="filters">
+      <input id="q" type="search" placeholder="search" aria-label="Search ticker or company" />
+      <div class="pick">
+        <select id="sector" aria-label="Sector"></select>
+      </div>
+    </div>
+
+    <div class="head grid" id="head">
+      <span class="lbl">#</span>
+      <span class="lbl l">Ticker</span>
+      <button type="button" data-sort="composite" data-dir="↓" aria-pressed="true">Score</button>
+      <button type="button" data-sort="annRet" data-dir="↓" aria-pressed="false">Ret</button>
+      <button type="button" data-sort="annVol" data-dir="↑" aria-pressed="false">Vol</button>
+    </div>
+  </header>
+
+  <div class="sum" id="sum" hidden></div>
+  <main class="list" id="list"></main>
+  <p class="note" id="note"></p>
+</div>
+
+<nav class="tabs">
+  <button type="button" id="tab-ranks" aria-pressed="true">Ranks</button>
+  <button type="button" id="tab-basket" aria-pressed="false">Basket</button>
+</nav>
+
+<script>
+  const DATA = __DATA__;
+
+  const SECTORS = DATA.sectors;
+  const stocks = DATA.stocks.map((s, i) => ({ ...s, i, sector: SECTORS[s.k] }));
+  const N = stocks.length;
+  const T = 52; // weekly returns per correlation vector
+
+  const CORR_FLAG = 0.70;
+  const PAGE = 120;
+
+  /* ---------- correlation vectors ----------
+     Each stock ships 52 standardised weekly log returns as int8. Re-centre and
+     re-normalise on decode and the dot product of two vectors is exactly their
+     correlation. */
+  const VEC = new Float32Array(N * T);
+  {
+    const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const idx = new Uint8Array(128);
+    for (let i = 0; i < 64; i++) idx[B64.charCodeAt(i)] = i;
+
+    for (let s = 0; s < N; s++) {
+      const str = DATA.stocks[s].c;
+      const off = s * T;
+      let out = 0;
+      for (let i = 0; i + 3 < str.length && out < T; i += 4) {
+        const n = (idx[str.charCodeAt(i)] << 18) | (idx[str.charCodeAt(i + 1)] << 12) |
+                  (idx[str.charCodeAt(i + 2)] << 6) | idx[str.charCodeAt(i + 3)];
+        for (const byte of [(n >> 16) & 255, (n >> 8) & 255, n & 255]) {
+          if (out < T) VEC[off + out++] = byte > 127 ? byte - 256 : byte;
+        }
+      }
+      let mean = 0;
+      for (let t = 0; t < T; t++) mean += VEC[off + t];
+      mean /= T;
+      let ss = 0;
+      for (let t = 0; t < T; t++) { VEC[off + t] -= mean; ss += VEC[off + t] * VEC[off + t]; }
+      const norm = Math.sqrt(ss) || 1;
+      for (let t = 0; t < T; t++) VEC[off + t] /= norm;
+    }
+  }
+
+  function rho(a, b) {
+    const oa = a * T, ob = b * T;
+    let d = 0;
+    for (let t = 0; t < T; t++) d += VEC[oa + t] * VEC[ob + t];
+    return d;
+  }
+
+  /* ---------- state ---------- */
+  const WL_KEY = "ranks-basket";
+  const picked = new Set();
+  try {
+    for (const t of JSON.parse(localStorage.getItem(WL_KEY) ?? "[]")) picked.add(t);
+  } catch {}
+
+  const state = { view: "ranks", sort: "composite", desc: true, q: "", sector: "" };
+
+  // Highest correlation between each stock and anything currently held. Kept as
+  // an array so rows can be flagged without recomputing per render.
+  const maxRho = new Float32Array(N);
+  const maxWith = new Int32Array(N);
+
+  function recomputeCorr() {
+    maxRho.fill(-2);
+    maxWith.fill(-1);
+    const held = stocks.filter((s) => picked.has(s.symbol));
+    if (!held.length) return;
+    for (let i = 0; i < N; i++) {
+      const self = picked.has(stocks[i].symbol);
+      for (const h of held) {
+        if (h.i === i) continue;
+        const r = rho(i, h.i);
+        if (r > maxRho[i]) { maxRho[i] = r; maxWith[i] = h.i; }
+      }
+      if (self && maxWith[i] === -1) maxRho[i] = -2;
+    }
+  }
+
+  const fmtScore = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
+  const fmtPct = (v) => (v * 100).toFixed(0) + "%";
+  const sign = (v) => (v >= 0 ? "pos" : "neg");
+
+  function save() {
+    try { localStorage.setItem(WL_KEY, JSON.stringify([...picked])); } catch {}
+  }
+
+  function toggle(symbol) {
+    if (picked.has(symbol)) picked.delete(symbol);
+    else picked.add(symbol);
+    save();
+    recomputeCorr();
+    render();
+  }
+
+  /* ---------- inverse-volatility weights ---------- */
+  function weights(held) {
+    const inv = held.map((s) => 1 / Math.max(s.annVol, 1e-6));
+    const total = inv.reduce((a, b) => a + b, 0);
+    return held.map((s, i) => ({ s, w: inv[i] / total }));
+  }
+
+  /* ---------- controls ---------- */
+  const sectorSel = document.getElementById("sector");
+  {
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = "All sectors";
+    sectorSel.append(all);
+    for (const name of SECTORS) {
+      const o = document.createElement("option");
+      o.value = name;
+      o.textContent = name;
+      sectorSel.append(o);
+    }
+  }
+  sectorSel.addEventListener("change", () => { state.sector = sectorSel.value; render(); });
+
+  let timer;
+  document.getElementById("q").addEventListener("input", (e) => {
+    clearTimeout(timer);
+    const v = e.target.value.trim().toLowerCase();
+    timer = setTimeout(() => { state.q = v; render(); }, 120);
+  });
+
+  for (const b of document.querySelectorAll("[data-sort]")) {
+    b.addEventListener("click", () => {
+      // Same column taps flip direction; a new column opens on its natural one
+      // — high score and return first, low volatility first.
+      if (state.sort === b.dataset.sort) state.desc = !state.desc;
+      else { state.sort = b.dataset.sort; state.desc = b.dataset.sort !== "annVol"; }
+      render();
+    });
+  }
+
+  document.getElementById("tab-ranks").addEventListener("click", () => { state.view = "ranks"; render(); });
+  document.getElementById("tab-basket").addEventListener("click", () => { state.view = "basket"; render(); });
+
+  /* ---------- rendering ---------- */
+  let shown = PAGE;
+
+  function selected() {
+    let out = stocks;
+    if (state.sector) out = out.filter((s) => s.sector === state.sector);
+    if (state.q) {
+      out = out.filter((s) =>
+        s.symbol.toLowerCase().includes(state.q) || s.name.toLowerCase().includes(state.q));
+    }
+    const k = state.sort;
+    return out.slice().sort((a, b) => (state.desc ? b[k] - a[k] : a[k] - b[k]));
+  }
+
+  function cell(v, cls, sgn) {
+    const el = document.createElement("span");
+    el.className = "n" + (cls ? " " + cls : "");
+    if (sgn) el.dataset.sign = sgn;
+    el.textContent = v;
+    return el;
+  }
+
+  function rowFor(s, ordinal, weight) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "row " + (state.view === "basket" ? "grid-basket" : "grid");
+    b.setAttribute("aria-pressed", String(picked.has(s.symbol)));
+
+    if (state.view !== "basket") {
+      const rank = document.createElement("span");
+      rank.className = "rank";
+      rank.textContent = ordinal;
+      b.append(rank);
+    }
+
+    const id = document.createElement("span");
+    id.className = "id";
+    const tkr = document.createElement("b");
+    tkr.textContent = s.symbol;
+    const flagged = maxRho[s.i] >= CORR_FLAG && maxWith[s.i] >= 0;
+    if (flagged) {
+      const em = document.createElement("em");
+      em.textContent = "≈";
+      em.title = `ρ ${maxRho[s.i].toFixed(2)} with ${stocks[maxWith[s.i]].symbol}`;
+      em.setAttribute("aria-label", `correlated ${maxRho[s.i].toFixed(2)} with ${stocks[maxWith[s.i]].symbol}`);
+      tkr.append(em);
+    }
+    const nm = document.createElement("i");
+    nm.textContent = s.name;
+    id.append(tkr, nm);
+    b.append(id);
+
+    if (state.view === "basket") {
+      b.append(cell(fmtPct(weight), "score"));
+      b.append(cell(fmtScore(s.composite), "", sign(s.composite)));
+      b.append(cell(fmtPct(s.annVol)));
+    } else {
+      b.append(cell(fmtScore(s.composite), "score", sign(s.composite)));
+      b.append(cell(fmtPct(s.annRet)));
+      b.append(cell(fmtPct(s.annVol)));
+    }
+
+    b.addEventListener("click", () => toggle(s.symbol));
+    return b;
+  }
+
+  function renderRanks() {
+    const rows = selected();
+    document.getElementById("asof").textContent =
+      rows.length.toLocaleString() + " · " + DATA.asOf;
+
+    const list = document.getElementById("list");
+    list.textContent = "";
+    if (!rows.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = "Nothing matches.";
+      list.append(p);
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < Math.min(shown, rows.length); i++) frag.append(rowFor(rows[i], i + 1));
+    list.append(frag);
+
+    if (rows.length > shown) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "more";
+      more.textContent = `${rows.length - shown} more`;
+      more.addEventListener("click", () => { shown += PAGE * 2; render(); });
+      list.append(more);
+    }
+  }
+
+  function renderBasket() {
+    const held = stocks.filter((s) => picked.has(s.symbol));
+    document.getElementById("asof").textContent =
+      held.length ? held.length + " names" : "";
+
+    const sum = document.getElementById("sum");
+    const list = document.getElementById("list");
+    sum.textContent = "";
+    list.textContent = "";
+
+    if (!held.length) {
+      sum.hidden = true;
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = "Tap a row in Ranks to add it.";
+      list.append(p);
+      return;
+    }
+    sum.hidden = false;
+
+    const w = weights(held);
+    w.sort((a, b) => b.s.composite - a.s.composite);
+
+    const avgScore = held.reduce((t, s) => t + s.composite, 0) / held.length;
+    const wVol = w.reduce((t, x) => t + x.w * x.s.annVol, 0);
+    const line = (k, v) => {
+      const row = document.createElement("div");
+      row.className = "sum-row";
+      const a = document.createElement("span");
+      a.textContent = k;
+      const b = document.createElement("span");
+      b.textContent = v;
+      row.append(a, b);
+      sum.append(row);
+    };
+    line("Avg score", fmtScore(avgScore));
+    line("Weighted vol", fmtPct(wVol));
+    line("Largest weight", fmtPct(Math.max(...w.map((x) => x.w))));
+
+    const counts = new Map();
+    for (const s of held) counts.set(s.sector, (counts.get(s.sector) ?? 0) + 1);
+    for (const [name, n] of [...counts].sort((a, b) => b[1] - a[1])) line(name, n);
+
+    const head = document.createElement("div");
+    head.className = "head grid-basket";
+    head.style.paddingLeft = "0";
+    head.style.paddingRight = "0";
+    head.style.marginTop = "16px";
+    for (const [text, cls] of [["Holdings", "lbl l"], ["Wt", "lbl"], ["Score", "lbl"], ["Vol", "lbl"]]) {
+      const el = document.createElement("span");
+      el.className = cls;
+      el.textContent = text;
+      el.style.textAlign = cls.endsWith("l") ? "left" : "right";
+      head.append(el);
+    }
+    sum.append(head);
+
+    const frag = document.createDocumentFragment();
+    for (const { s, w: wt } of w) frag.append(rowFor(s, 0, wt));
+    list.append(frag);
+  }
+
+  function render() {
+    const basket = state.view === "basket";
+    document.getElementById("heading").textContent = basket ? "Basket" : "Ranks";
+    document.getElementById("filters").hidden = basket;
+    document.getElementById("head").hidden = basket;
+    document.getElementById("sum").hidden = !basket;
+    document.getElementById("tab-ranks").setAttribute("aria-pressed", String(!basket));
+    document.getElementById("tab-basket").setAttribute("aria-pressed", String(basket));
+
+    for (const b of document.querySelectorAll("[data-sort]")) {
+      const on = b.dataset.sort === state.sort;
+      b.setAttribute("aria-pressed", String(on));
+      if (on) b.dataset.dir = state.desc ? "↓" : "↑";
+    }
+
+    document.getElementById("tab-basket").textContent =
+      picked.size ? `Basket · ${picked.size}` : "Basket";
+
+    if (basket) renderBasket();
+    else renderRanks();
+  }
+
+  document.getElementById("note").textContent =
+    "Score = mean of 12-1 and 6-1 volatility-adjusted momentum; each is the window's annualised log " +
+    "return over its own annualised volatility. Ret and vol are averaged across the same two windows. " +
+    "≈ marks a name correlating " + CORR_FLAG.toFixed(2) + " or higher with something already held, on 52 weekly returns. " +
+    "US common stock on NYSE/Nasdaq/AMEX, $5+ and $25M+ median daily dollar volume; preferreds, units and " +
+    "duplicate share classes removed. Not investment advice.";
+
+  recomputeCorr();
+  render();
+</script>
