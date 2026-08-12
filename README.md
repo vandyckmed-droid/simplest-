@@ -1,6 +1,6 @@
 # Ranks
 
-Every tradeable US stock — 1,517 after cleaning — plus 89 thematic ETFs, in one
+Every tradeable US stock — 1,500 after cleaning — plus 89 thematic ETFs, in one
 list, ranked on volatility-adjusted 12-1 and 6-1 momentum. Tap to build a
 basket; it sizes itself equally or by inverse volatility, in percent or in
 cash, or fill itself. Output is a single self-contained HTML page built for a
@@ -12,6 +12,7 @@ npm run data         # stocks only    -> data/ranks.json
 npm run etfs         # funds only     -> data/etfs.json
 npm run render       # inline + write -> dist/ranks.html
 npm run etf:check    # is every fund in the list still trading?
+npm run test:select  # check the basket filler, synthetic and against live data
 ```
 
 `API_KEY` must hold a Financial Modeling Prep key. Everything targets FMP's
@@ -77,7 +78,14 @@ units, and lists every share class separately. The cleaner:
 4. requires price ≥ $5 and ≥ $25M median daily dollar volume over 63 sessions,
    plus a full 12-1 window of history.
 
-3,504 cleaned lines in, **1,517** out.
+4,532 raw rows in, **1,500** out.
+
+Run the build after the close. The candidate gate uses the screener's
+single-session volume, so a mid-session run sees partial-day figures and drops
+borderline names before their history is ever fetched: the build behind this
+snapshot ran during the session and lost 161 more names at that gate than the
+previous one, taking the universe from 1,517 to 1,500. NEO left XHS's holdings
+mapping that way, at $27M median dollar volume against a $25M floor.
 
 ## Names
 
@@ -153,6 +161,63 @@ tally needs no legend, and each pair binds tight and separates wide: at an even
 spacing, Healthcare's cross beside its count reads as "+1" — one more — rather
 than one healthcare name.
 
+## Filling the basket
+
+**Fill 20** walks the list as displayed and takes names that add something. The
+pool is whatever is on screen, so an active sector, cap or window filter narrows
+it; names already held seed the walk, constraining what comes next without being
+offered again. Two tests, in the order they run:
+
+1. reject a candidate whose **mean** correlation to the basket reaches **0.12**,
+   measured on Ledoit-Wolf–shrunk correlations;
+2. reject one that duplicates any **single** holding — **raw** correlation above
+   **0.70**.
+
+Rank does the choosing; the filter only ever says no. If it cannot find enough
+names it returns fewer.
+
+### Why that rule
+
+Measured over the top 50 by selecting on one half-year and scoring on the next,
+so the figures are what survives new data rather than what fits the old:
+
+| method | effective bets, out of sample |
+|---|---|
+| top 20 by rank | 4.2 |
+| **mean correlation < 0.12** | **6.7** |
+| max correlation < 0.35 only | 4.7 |
+| cluster at 0.25, √size slots | 4.5 |
+
+Clustering and max-thresholding look competitive in sample and mostly evaporate
+out of it. They are not wrong, they are *weak*: a duplicate test only excludes
+the handful of names that have a twin, so it cannot move an aggregate. The mean
+test reshapes the whole basket. On the live universe the filled 20 runs about
+**8 effective bets against 4.2** for taking ranks 1–20 outright, costing roughly
+a quarter-point of average blend.
+
+Three things the measurement corrected, each of which had produced a wrong
+answer first:
+
+- **Extreme correlations persist; averages are the noisier statistic.** Per
+  name, maximum correlation carries from one half-year to the next at 0.82,
+  average at 0.40. VLO/MPC went 0.81 → 0.89, SNDK/MU 0.71 → 0.83. The duplicate
+  veto is reliable — it is simply not where the diversification comes from.
+- **Shrink the mean, not the veto.** Ledoit-Wolf pulls every correlation toward
+  the average, which is right for something you average over and wrong for "is
+  this the same thing twice". At the intensity a half-year sample earns, MU/WDC
+  reads 0.43 when it is really 0.66, so a veto on shrunk numbers waves through
+  the twins it exists to catch.
+- **Never pad to the target.** Topping a short result up with the next
+  highest-ranked names puts back exactly what the rule rejected. An early
+  version did this and every threshold produced an identical basket, which
+  looked like a finding rather than a bug.
+
+Caveat: one split of one year in one universe. The direction is large and
+consistent but 0.12 is fitted to this sample — treat anything from 0.10 to 0.13
+as the same answer. And every measure here is blind to risk that daily
+correlation does not express; a dozen uncorrelated biotechs are a dozen
+independent bets right up until a sector-wide shock makes them one.
+
 ## Display
 
 Weights read as **percent** or as **cash** — the dollars each holding needs in a
@@ -165,12 +230,14 @@ it, and a column of weights is a thing readers add up.
 
 ```
 src/universe.js          screener output -> tradeable common stock
+src/momentum.js          the windowing, scoring and vector math, shared by both builds
 src/ranks-build.js       universe -> prices -> scores + return vectors -> data/ranks.json
-src/ranks-template.html  the page; __DATA__ is the injection point
-src/etf-holdings.js      hand-kept top holdings per fund, resolved at render time
 src/etf-universe.js      the thematic fund list, as ordered groups
-src/momentum.js          the windowing and scoring math, shared by both builds
-src/ranks-render.js      inlines the JSON, writes dist/ranks.html
+src/etf-holdings.js      hand-kept top holdings per fund, resolved at render time
+src/select.js            the basket filler — no DOM, no imports
+src/select-test.js       npm run test:select
+src/ranks-template.html  the page; __DATA__ and __SELECT__ are the injection points
+src/ranks-render.js      inlines the JSON and src/select.js, writes dist/ranks.html
 ```
 
 `dist/ranks.html` is fully self-contained — the data is embedded, there are no
