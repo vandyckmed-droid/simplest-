@@ -130,7 +130,7 @@ const compact = {
         k: sectorIndex.get(s.sector) ?? 0,
         m: Math.round(s.marketCap / 1e6), // $M; the page ranks on it for the cap filter
         ...windows(s),
-        c: s.corr, // base64 return vector, for the basket filler
+        c: s.corr, // base64 return vector, for the correlation flag
       })),
     },
     etfs: {
@@ -155,20 +155,10 @@ const compact = {
 
 const template = await readFile(new URL('ranks-template.html', import.meta.url), 'utf8');
 
-// The selector lives in its own file so `npm run test:select` can exercise it in
-// Node; the page needs the same source inline. Only the export line has to go.
-const select = (await readFile(new URL('select.js', import.meta.url), 'utf8'))
-  .replace(/^export \{[^}]*\};?[ \t]*$/m, '');
-if (/^\s*export\b/m.test(select)) throw new Error('src/select.js still has an export after stripping');
-
 // `</script` inside a string literal would close the host script element early.
 const json = JSON.stringify(compact).replaceAll('</', '<\\/');
-const html = template
-  .replace('__SELECT__', () => select)
-  .replace('__DATA__', () => json);
-for (const marker of ['__SELECT__', '__DATA__']) {
-  if (html.includes(marker)) throw new Error(`${marker} was not replaced`);
-}
+const html = template.replace('__DATA__', () => json);
+if (html.includes('__DATA__')) throw new Error('the injection point was not replaced');
 
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
 await writeFile(new URL('../dist/ranks.html', import.meta.url), html);

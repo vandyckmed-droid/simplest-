@@ -9,8 +9,7 @@
     "build": "node src/ranks-build.js && node src/etf-build.js && node src/ranks-render.js",
     "data": "node src/ranks-build.js",
     "etfs": "node src/etf-build.js",
-    "render": "node src/ranks-render.js",
-    "test:select": "node src/select-test.js"
+    "render": "node src/ranks-render.js"
   },
   "engines": {
     "node": ">=20"

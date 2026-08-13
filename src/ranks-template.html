@@ -18,6 +18,8 @@
     --sel: #f2f4f7;
     --flag: #9a5b12;
     --flag-bg: #f6efe4;
+    --warn: #e0342f;
+    --warn-glow: 224, 52, 47;
 
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
   }
@@ -36,6 +38,8 @@
       --sel: #16181d;
       --flag: #e0a95c;
       --flag-bg: #221c12;
+      --warn: #ff5a52;
+      --warn-glow: 255, 90, 82;
     }
   }
 
@@ -52,6 +56,8 @@
     --sel: #16181d;
     --flag: #e0a95c;
     --flag-bg: #221c12;
+    --warn: #ff5a52;
+    --warn-glow: 255, 90, 82;
   }
 
   body {
@@ -346,6 +352,17 @@
     stroke-linejoin: round;
     fill: none;
     opacity: .85;
+  }
+
+  /* Already represented: a dot, not a label. Small enough to cost nothing, lit
+     enough to catch the eye on either ground. */
+  .dot {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--warn);
+    box-shadow: 0 0 0 2px rgba(var(--warn-glow), .16), 0 0 7px 1px rgba(var(--warn-glow), .55);
   }
 
   .n {
@@ -681,10 +698,15 @@
   const PAGE = 120;
   const T = 252; // daily returns per vector
 
-  /* ---------- basket filler, inlined verbatim from src/select.js ----------
-     Kept in its own file so `npm run test:select` can check it against both
-     synthetic cases and the live universe; the renderer drops it in here. */
-__SELECT__
+  /* A row is flagged when it correlates this highly with any ONE name already
+     held — the question "do I own this already?", asked pairwise.
+
+     0.60 is well into the tail of the daily distribution: a random pair in this
+     universe runs about 0.12, the 90th percentile 0.32. Genuinely related names
+     sit far above it — HD/LOW 0.88, XOM/CVX 0.84, JPM/BAC 0.75 — so the mark
+     fires on duplicates rather than on family resemblance. Against a
+     diversified eight-name basket it lights about 27 of 1,500 rows. */
+  const CORR_FLAG = 0.60;
 
   /* ---------- return vectors ----------
      Every item ships 252 standardised daily log returns as int8. Re-centre and
@@ -798,6 +820,10 @@ __SELECT__
       groups: src.groups,
       hasCap: src.hasCap,
       vec: decodeVectors(src.items),
+      // Highest correlation between each item and anything currently held, kept
+      // as arrays so rows can be flagged without recomputing per render.
+      maxRho: new Float32Array(N),
+      maxWith: new Int32Array(N),
       asOf: src.asOf ?? DATA.asOf,
     };
   }
@@ -842,6 +868,7 @@ __SELECT__
     state.sector = "";
     fillSectors();
     saveFilters();
+    recomputeFlags();
     shown = PAGE;
     render();
   }
@@ -860,6 +887,7 @@ __SELECT__
     if (U.picked.has(symbol)) U.picked.delete(symbol);
     else U.picked.add(symbol);
     save();
+    recomputeFlags();
     render();
   }
 
@@ -877,27 +905,34 @@ __SELECT__
     return rows.map((s, i) => ({ s, w: inv[i] / total }));
   }
 
-  /* ---------- filling the basket ----------
-     The pool is the list as displayed, so an active sector, cap or window
-     filter narrows what can be added. Names already held seed the walk: they
-     constrain what comes next without being offered again. */
-  function fillBasket() {
-    const pool = selected().filter((s) => !U.picked.has(s.symbol)).slice(0, POOL);
-    const owned = held();
-    if (owned.length >= WANT || !pool.length) return;
+  /** Correlation between two items — a dot product, the vectors being unit-norm. */
+  function rho(a, b) {
+    const oa = a * T;
+    const ob = b * T;
+    let d = 0;
+    for (let t = 0; t < T; t++) d += U.vec[oa + t] * U.vec[ob + t];
+    return d;
+  }
 
-    const candidates = [...owned, ...pool];
-    const rows = candidates.map((s) => ({ u: U.vec.subarray(s.i * T, s.i * T + T) }));
-    const { picked } = fill(rows, { want: WANT, held: owned.map((_, k) => k) });
-    for (const k of picked) U.picked.add(candidates[k].symbol);
-
-    save();
-    render();
+  /** For every row, its strongest relationship with anything in the basket. */
+  function recomputeFlags() {
+    U.maxRho.fill(-2);
+    U.maxWith.fill(-1);
+    const h = held();
+    if (!h.length) return;
+    for (let i = 0; i < U.N; i++) {
+      if (U.picked.has(U.items[i].symbol)) continue; // already in; nothing to warn about
+      for (const x of h) {
+        const r = rho(i, x.i);
+        if (r > U.maxRho[i]) { U.maxRho[i] = r; U.maxWith[i] = x.i; }
+      }
+    }
   }
 
   function clearBasket() {
     U.picked.clear();
     save();
+    recomputeFlags();
     render();
   }
 
@@ -1037,6 +1072,18 @@ __SELECT__
       sub.append(peek);
     }
 
+    // Already held something like this: a dot, not a label.
+    if (U.maxRho[s.i] >= CORR_FLAG && U.maxWith[s.i] >= 0) {
+      const twin = U.items[U.maxWith[s.i]].symbol;
+      const label = `correlates ${U.maxRho[s.i].toFixed(2)} with ${twin}, which you hold`;
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.title = label;
+      dot.setAttribute("role", "img");
+      dot.setAttribute("aria-label", label);
+      sub.append(dot);
+    }
+
     id.append(tkr, sub);
     b.append(id);
 
@@ -1120,7 +1167,7 @@ __SELECT__
     if (!rows.length) {
       const p = document.createElement("p");
       p.className = "empty";
-      p.textContent = "Tap a row in Ranks to add it, or fill it from the list.";
+      p.textContent = "Tap a row in Ranks to add it.";
       list.append(p);
       return;
     }
@@ -1201,19 +1248,10 @@ __SELECT__
 
   const basketGrid = () => "grid-basket" + (state.display === "cash" ? " cash" : "");
 
-  /** Fill and Clear, above the summary. Fill hides once the basket is full. */
+  /** Clear, above the summary. */
   function basketActions(count) {
     const bar = document.createElement("div");
     bar.className = "acts";
-    if (count < WANT) {
-      const f = document.createElement("button");
-      f.type = "button";
-      f.id = "act-fill";
-      f.textContent = count ? `Fill to ${WANT}` : `Fill ${WANT}`;
-      f.title = `Walk the ${U.label.toLowerCase()} list from the top, taking names whose mean correlation to the basket stays under ${AVG} and that duplicate nothing already held`;
-      f.addEventListener("click", fillBasket);
-      bar.append(f);
-    }
     if (count) {
       const c = document.createElement("button");
       c.type = "button";
@@ -1404,5 +1442,6 @@ __SELECT__
     else renderRanks();
   }
 
+  recomputeFlags();
   render();
 </script>
