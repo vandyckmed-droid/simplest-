@@ -29,8 +29,14 @@
 import { cached } from './cache.mjs';
 import { dailyAdjusted, profile, screener } from './fmp.mjs';
 
-/** How many candidates to pull history for before ranking properly. */
-const POOL_SIZE = 160;
+/**
+ * How many candidates to pull history for before ranking properly. This only
+ * bounds the download; it has to be comfortably wider than the universe,
+ * because the pool is ordered on a single day's dollar volume while the
+ * selection is made on a quarter's median, and because eligibility and
+ * de-duplication both thin it before the cut.
+ */
+const POOL_SIZE = 300;
 /** Sessions the liquidity median is taken over — about a quarter. */
 const LIQUIDITY_DAYS = 63;
 /** 12–1 needs day −252, so 253 bars; ask for a little more. */

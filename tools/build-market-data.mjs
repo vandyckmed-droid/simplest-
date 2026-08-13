@@ -15,7 +15,7 @@ import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cached } from './cache.mjs';
-import { logo, profile } from './fmp.mjs';
+import { logo } from './fmp.mjs';
 import { selectUniverse } from './universe.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -24,7 +24,7 @@ const DATA_OUT = join(ROOT, 'src', 'data', 'market.json');
 const LOGO_DIR = join(ROOT, 'src', 'assets', 'logos');
 
 /** How many names the universe holds. */
-const UNIVERSE_SIZE = 50;
+const UNIVERSE_SIZE = 100;
 
 /** Enough history for the 2Y graph with room to spare. */
 const HISTORY_FROM = '2023-08-01';
@@ -126,29 +126,25 @@ async function buildStock(entry, asOf) {
 
   const dayChange = last.close / previous.close - 1;
 
-  // Cross-check our day change against the provider's own quote — but only
-  // when we kept this symbol's newest bar. Once trimmed, the quote describes
-  // a later session than the one we measured, so a difference means nothing.
-  if (!trimmed) {
-    try {
-      const { value: rawProfile } = await cached(
-        `profile-${entry.symbol}`,
-        () => profile(entry.symbol),
-        { force },
-      );
-      if (Number.isFinite(rawProfile.changePercentage)) {
-        const theirs = rawProfile.changePercentage / 100;
-        if (Math.abs(theirs - dayChange) > 0.005) {
-          problems.push(
-            `${entry.symbol}: day change from adjusted closes (${(dayChange * 100).toFixed(2)}%) ` +
-              `differs from the provider quote (${(theirs * 100).toFixed(2)}%)`,
-          );
-        }
-      }
-    } catch (error) {
-      problems.push(`${entry.symbol}: could not cross-check the day change — ${error.message}`);
-    }
-  }
+  // There was a cross-check here against the provider's own quote. It has
+  // been removed, because it could not be made to mean anything.
+  //
+  // That quote is live — it describes whichever session is trading now —
+  // while this dataset deliberately ends at the last session the whole field
+  // completed. The two are usually different days, so the comparison fired on
+  // perfectly good data: at a hundred names it flagged a third of the
+  // universe. Gating on the quoted price matching our last close does not
+  // rescue it either, since a stock trading near yesterday's close passes the
+  // gate while still being quoted a day later.
+  //
+  // What it was guarding against — a series the provider adjusted wrongly —
+  // is not detectable this way. A missed split looks like a large single-day
+  // move, and this universe contains genuine ones up to +59%, so no threshold
+  // separates the two. The figures that do get checked are checked properly:
+  // `npm test` re-derives every stock's momentum from these closes, and the
+  // browser suite asserts the day change on screen against price ÷ previous
+  // close. A check that cries wolf is worse than no check, because it teaches
+  // you to skim the build notes.
 
   return {
     stock: {
@@ -291,7 +287,7 @@ async function main() {
     source: 'Financial Modeling Prep — dividend- and split-adjusted daily closes',
     asOf,
     selection:
-      'The 50 most liquid US-listed companies — domestic common stocks on ' +
+      'The 100 most liquid US-listed companies — domestic common stocks on ' +
       'NYSE, Nasdaq or NYSE American, and ADRs on NYSE or Nasdaq — by median ' +
       'daily dollar volume over the last 63 sessions, one listing per company.',
     stocks,

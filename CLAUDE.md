@@ -75,6 +75,7 @@ Test
 - ✓ **Phase 8** — Ticker-detail interaction
 - ✓ **Phase 9** — 50-stock universe
 - ✓ **Phase 10** — ADRs eligible
+- ✓ **Phase 11** — 100-name universe
 
 ## Commands
 
