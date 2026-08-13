@@ -6,22 +6,44 @@ The only actions the product ever offers are **look, sort, filter, inspect,
 select, deselect**. Portfolio weights are never entered by hand — they are
 derived. Every phase is built against that rule.
 
-## Status — Phase 5: Real Market Data
+## Status — Phase 6: 12–1 Momentum
 
 | Built | Not built yet |
 | --- | --- |
 | iPhone-first layout with safe-area handling | The 500-name universe |
-| Ranks: rank, real logo, ticker, price, day change | 12–1 and 6–1 momentum |
+| Ranks: rank, real logo, ticker, price, day change | 6–1 momentum |
 | Select / deselect, persisted on the device | Momentum Blend |
-| Ticker detail: price, real graph, 1M–2Y windows | Volatility |
-| Swipe left/right through the ranked list | Covariance, clustering, HRP |
-| Portfolio: your selections, equal-weighted to 100% | Sorting and filtering |
-| Real adjusted end-of-day prices, names, and logos | Intraday prices |
+| Ticker detail: price, real graph, 1M–2Y windows | Covariance, clustering, HRP |
+| 12–1 return, risk-adjusted momentum, and rank | Sorting and filtering |
+| Swipe left/right through the ranked list | Intraday prices |
+| Portfolio: your selections, equal-weighted to 100% | |
+| Real adjusted end-of-day prices, names, and logos | |
 | Light and dark mode | |
 
-Prices, company names, and logos are real. The only thing the app computes is
-the portfolio weighting — the momentum and volatility rows on ticker detail
-show an em dash until the calculation phase fills them in.
+## The 12–1 signal
+
+`src/momentum.ts` holds the maths as pure functions over an ascending series
+of adjusted closes. Trading day −k is `closes[length - 1 - k]`, and the window
+runs from day −252 through day −21 inclusive — a year of prices with the most
+recent month skipped, so the last few weeks' reversal does not contaminate the
+measurement.
+
+| Figure | How |
+| --- | --- |
+| 12–1 Return | `P(−21) / P(−252) − 1` |
+| Volatility | sample standard deviation of daily log returns in that window, × √252 |
+| Risk-Adjusted Momentum | return ÷ volatility |
+| 12–1 Rank | `100 × (names with a lower risk-adjusted value) / (count − 1)` |
+
+Ties share the lower percentile, so the weakest name sits at 0 and the
+strongest at 100. A price line that never moves has no risk to divide by, so
+its ratio is null rather than astronomical — floating-point noise leaves
+around 1e-16 of "volatility" on a flat series, which is why the guard is a
+small epsilon and not a test against zero.
+
+Everything is derived once from the stored closes, so the same dataset always
+gives the same numbers. `npm test` checks each step against examples worked
+out by hand, and re-derives every stock's return straight from the raw prices.
 
 ## Market data
 
@@ -148,6 +170,7 @@ src/
   selectionStore.ts    chosen symbols: one store, every screen
   weights.ts           equal weighting, summing to exactly 100%
   useSwipe.ts          axis-locked left/right gestures
+  momentum.ts          the 12–1 signal, as pure functions
   data/market.ts       the app's only view of market data
   data/market.json     generated dataset (real adjusted closes)
   assets/logos/        real company marks, bundled at build time
@@ -169,6 +192,7 @@ src/
     global.css         reset and base type
 
 tools/                 build-time only; never shipped to the browser
+  test-momentum.ts     hand-worked tests for the 12–1 maths
   fmp.mjs              provider client, reads API_KEY from the environment
   cache.mjs            on-disk cache of raw responses
   build-market-data.mjs  fetch -> validate -> src/data/market.json
@@ -204,5 +228,8 @@ Checked in Chromium at iPhone 14 Pro and 320px widths, in light and dark:
 - Each graph window draws a distinct real series over the right date range
 - The page makes no external network request at runtime
 - No credential or provider hostname appears anywhere in the built output
+- Every 12–1 figure on screen matches a recomputation from the raw closes
+- The skipped month cannot change the signal, checked by tampering with it
+- Momentum Blend stays empty
 - The theme toggle round-trips and survives a reload
 - No console errors, and `npm run build` passes strict typecheck

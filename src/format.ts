@@ -39,6 +39,26 @@ export function formatWeight(fraction: number): string {
   return weightPercent.format(fraction);
 }
 
+/** A ratio, e.g. "1.63" or "−0.42". */
+export function formatRatio(value: number): string {
+  const sign = value < 0 ? '−' : '';
+  return `${sign}${Math.abs(value).toFixed(2)}`;
+}
+
+/** A percentile as a place, e.g. "89th", "1st", "0th". */
+export function formatPercentile(percentile: number): string {
+  const whole = Math.round(percentile);
+  const lastTwo = whole % 100;
+  const last = whole % 10;
+  const suffix =
+    lastTwo >= 11 && lastTwo <= 13 ? 'th'
+    : last === 1 ? 'st'
+    : last === 2 ? 'nd'
+    : last === 3 ? 'rd'
+    : 'th';
+  return `${whole}${suffix}`;
+}
+
 /** Momentum blend score, e.g. "96.4". */
 export function formatScore(score: number): string {
   return score.toFixed(1);

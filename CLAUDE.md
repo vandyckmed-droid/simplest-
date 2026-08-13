@@ -70,6 +70,7 @@ Test
 - ✓ **Phase 3** — Ticker detail
 - ✓ **Phase 4** — Basic portfolio
 - ✓ **Phase 5** — Real market data
+- ✓ **Phase 6** — 12–1 momentum
 
 ## Commands
 
@@ -77,6 +78,7 @@ Test
 npm install
 npm run data     # rebuild src/data/market.json from the API (needs API_KEY)
 npm run dev      # http://localhost:5173
-npm run build    # strict typecheck + production build
+npm test         # 12–1 momentum maths, against hand-worked examples
+npm run build    # tests + strict typecheck + production build
 npm run preview  # serve the production build
 ```

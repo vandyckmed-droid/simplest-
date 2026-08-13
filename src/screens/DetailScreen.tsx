@@ -10,7 +10,14 @@ import {
   rangeFor,
   seriesFor,
 } from '../data/market';
-import { directionOf, formatMoney, formatSignedPercent } from '../format';
+import {
+  directionOf,
+  formatMoney,
+  formatPercentile,
+  formatRatio,
+  formatSignedPercent,
+  formatSignedPercentWhole,
+} from '../format';
 import { toggleSelection, useSelectedSymbols } from '../selectionStore';
 import type { WindowId } from '../types';
 import { useSwipe } from '../useSwipe';
@@ -24,12 +31,8 @@ interface DetailScreenProps {
 
 type Direction = 'next' | 'prev' | 'none';
 
-/**
- * Momentum and volatility are calculated in a later phase. The rows stay so
- * the screen keeps its shape, but they show nothing rather than a number the
- * app has not worked out yet.
- */
-const PENDING_STATS = ['Momentum Blend', '12–1 Return', 'Volatility'];
+/** Shown where a figure has not been worked out. */
+const PENDING = '—';
 
 export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps) {
   // The window is chosen once per visit and kept while swiping between
@@ -74,6 +77,30 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
   const points = seriesFor(stock, window_);
   const range = rangeFor(stock, window_);
   const changeDirection = directionOf(stock.dayChange);
+  const momentum = stock.momentum;
+
+  // Momentum Blend stays empty until it is built.
+  const stats = [
+    {
+      label: '12–1 Return',
+      value: momentum ? formatSignedPercentWhole(momentum.return12_1) : PENDING,
+    },
+    {
+      label: '12–1 Risk-Adjusted Momentum',
+      value:
+        momentum && momentum.riskAdjusted !== null
+          ? formatRatio(momentum.riskAdjusted)
+          : PENDING,
+    },
+    {
+      label: '12–1 Rank',
+      value:
+        momentum && momentum.percentile !== null
+          ? formatPercentile(momentum.percentile)
+          : PENDING,
+    },
+    { label: 'Momentum Blend', value: PENDING },
+  ];
 
   return (
     <section
@@ -131,20 +158,24 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
           <WindowPicker active={window_} onSelect={setWindow} />
 
           <ul className={styles.stats}>
-            {PENDING_STATS.map((label) => (
+            {stats.map(({ label, value }) => (
               <li key={label}>
                 <div className={styles.stat}>
                   <span className={styles.statLabel}>{label}</span>
-                  <span className={styles.statValue} aria-label="Not yet calculated">
-                    —
+                  <span
+                    className={`${styles.statValue} tnum`}
+                    aria-label={value === PENDING ? 'Not yet calculated' : undefined}
+                  >
+                    {value}
                   </span>
                 </div>
               </li>
             ))}
           </ul>
           <p className={styles.footnote}>
-            Prices are adjusted closes. Momentum and volatility arrive with the
-            calculation phase.
+            {momentum
+              ? `12–1 momentum measures ${formatAsOfLong(momentum.from)} to ${formatAsOfLong(momentum.to)}, skipping the most recent month. Risk-adjusted is that return divided by annualised volatility over the same window; the rank is its percentile across the ${RANKS.length} names here.`
+              : 'Not enough price history to measure 12–1 momentum.'}
           </p>
         </article>
       </div>

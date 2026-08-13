@@ -8,9 +8,33 @@
  */
 
 import dataset from './market.json';
-import type { Stock, WindowId } from '../types';
+import { momentum12_1, percentileRanks } from '../momentum';
+import type { Momentum12_1, Stock, WindowId } from '../types';
 
-export const RANKS: Stock[] = dataset.stocks;
+/**
+ * The 12–1 signal is derived here, once, from the stored adjusted closes.
+ * The maths lives in `src/momentum.ts` and is tested against hand-worked
+ * examples; this only joins it to the dataset and ranks the field.
+ */
+function withMomentum(stocks: typeof dataset.stocks): Stock[] {
+  const computed = stocks.map((stock) => momentum12_1(stock.history.closes));
+  const percentiles = percentileRanks(computed.map((m) => m?.riskAdjusted ?? null));
+
+  return stocks.map((stock, i) => {
+    const m = computed[i];
+    const momentum: Momentum12_1 | null = m && {
+      return12_1: m.return12_1,
+      volatility: m.volatility,
+      riskAdjusted: m.riskAdjusted,
+      percentile: percentiles[i],
+      from: stock.history.dates[m.fromIndex],
+      to: stock.history.dates[m.toIndex],
+    };
+    return { ...stock, momentum: momentum ?? null };
+  });
+}
+
+export const RANKS: Stock[] = withMomentum(dataset.stocks);
 
 /** The most recent close in the dataset, e.g. "2026-08-12". */
 export const AS_OF: string = dataset.asOf;
