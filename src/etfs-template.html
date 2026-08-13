@@ -1,0 +1,1272 @@
+<title>Thematic ETF Board</title>
+
+<style>
+  /* Eighty-nine funds fit on one page, which is the whole reason this is a
+     board rather than a scrolling list. Two consequences run through the
+     design: the strip at the top can show every name at once, and hue is spent
+     on exactly one thing — which correlation group a fund belongs to. Nothing
+     else on the page is coloured, so a rail down the side of a row always means
+     the same thing.
+
+     Neutrals carry a warm bias so the greys read as chosen. Both themes are
+     defined token-level across all three viewer states: unstamped light,
+     unstamped dark via the media query, and either one stamped explicitly. */
+  :root {
+    --bg: #fbfbf9;
+    --raise: #f3f2ee;
+    --sunk: #eae8e1;
+    --ink: #141413;
+    --ink-2: #57564f;
+    --muted: #83817a;
+    --rule: #e4e2da;
+    --rule-2: #d3d1c7;
+
+    /* Eight categorical slots, validated as a set against this surface. The
+       order is the colour-blind-safety mechanism, not a preference. */
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+    --other: #8a8a84;
+
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413;
+      --raise: #1e1e1c;
+      --sunk: #262622;
+      --ink: #f2f1ec;
+      --ink-2: #b6b4a9;
+      --muted: #85837a;
+      --rule: #2b2b27;
+      --rule-2: #3a3a34;
+
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+      --other: #7e7e77;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #141413;
+    --raise: #1e1e1c;
+    --sunk: #262622;
+    --ink: #f2f1ec;
+    --ink-2: #b6b4a9;
+    --muted: #85837a;
+    --rule: #2b2b27;
+    --rule-2: #3a3a34;
+
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --other: #7e7e77;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  [hidden] { display: none !important; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  :where(button, input, select, summary):focus-visible {
+    outline: 2px solid var(--ink-2);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 20px calc(48px + env(safe-area-inset-bottom));
+  }
+
+  /* ---------- masthead ---------- */
+  .mast {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 30px 0 18px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 27px;
+    font-weight: 680;
+    letter-spacing: -.028em;
+    text-wrap: balance;
+  }
+
+  .lede {
+    margin: 5px 0 0;
+    max-width: 60ch;
+    color: var(--ink-2);
+    font-size: 13px;
+  }
+
+  .facts {
+    display: flex;
+    gap: 22px;
+    margin: 0;
+  }
+
+  .facts div { display: flex; flex-direction: column; gap: 1px; }
+  .facts dt {
+    order: 2;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .facts dd {
+    order: 1;
+    margin: 0;
+    font-size: 17px;
+    font-weight: 680;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- the strip: every fund at once ----------
+     A beeswarm on one axis. x is the score, colour is the correlation group,
+     and the whole universe is 89 marks — so the shape of the ranking, and how
+     the groups sit inside it, reads before any row does. */
+  .strip {
+    position: relative;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 14px 0 0;
+    margin-bottom: 2px;
+  }
+
+  /* Height is set from the deepest stack at render time; this is the floor. */
+  .swarm { position: relative; min-height: 56px; }
+
+  .swarm button {
+    position: absolute;
+    appearance: none;
+    border: 0;
+    padding: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--c);
+    cursor: pointer;
+    /* Only x is centred on the mark: the lane is laid out in whole pixels from
+       the axis, so the top of the tallest stack cannot escape the strip. */
+    transform: translateX(-50%);
+  }
+
+  .swarm button[data-held="1"] {
+    /* 2px of surface between the mark and its ring keeps the fills separated */
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--ink);
+    z-index: 2;
+  }
+
+  .swarm button:hover, .swarm button:focus-visible { z-index: 3; }
+
+  .axis {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0 10px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- control bar ---------- */
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    padding: 10px 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .bar input, .bar select {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    border-bottom: 1px solid var(--rule-2);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    /* 16px exactly: iOS Safari zooms the viewport when a focused field is
+       smaller, which shifts the layout out from under the reader. */
+    font-size: 16px;
+    padding: 3px 0;
+    min-height: 30px;
+  }
+
+  .bar input { flex: 1 1 160px; min-width: 0; }
+  .bar select { flex: 0 1 190px; min-width: 0; }
+
+  .bar input:focus-visible, .bar select:focus-visible {
+    outline: none;
+    border-bottom-color: var(--ink);
+    box-shadow: 0 1px 0 0 var(--ink);
+  }
+
+  .seg { display: flex; align-items: center; gap: 6px; }
+
+  .seg > span {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .seg div { display: flex; gap: 2px; }
+
+  .seg button {
+    appearance: none;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .seg button:hover { background: var(--raise); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+  /* ---------- the two columns ---------- */
+  .body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; }
+
+  @media (min-width: 920px) {
+    .body { grid-template-columns: minmax(0, 1fr) 268px; align-items: start; }
+    /* The bar wraps to two rows at some widths, so its height is measured
+       rather than assumed — a fixed offset slides the rail under it. */
+    aside { position: sticky; top: calc(var(--bar-h, 56px) + 10px); }
+  }
+
+  /* ---------- board ---------- */
+  .colhead, .row {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) 62px 50px 46px 24px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .colhead {
+    padding: 12px 8px 7px 11px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .colhead button, .colhead span {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  .colhead button { cursor: pointer; }
+  .colhead button:hover { color: var(--ink); }
+  .colhead button[aria-pressed="true"] { color: var(--ink); }
+  .colhead button[aria-pressed="true"]::after { content: " " attr(data-dir); }
+  .colhead .l { text-align: left; }
+
+  .band {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 17px 8px 7px 11px;
+  }
+
+  .band .sw { width: 12px; height: 12px; border-radius: 3px; background: var(--c); flex: 0 0 auto; }
+  .band b { font-size: 13px; font-weight: 680; }
+  .band span { font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  .row {
+    position: relative;
+    width: 100%;
+    padding: 7px 8px 7px 11px;
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  /* The rail is the group. It is drawn as a pseudo-element rather than a border
+     so the row's own grid geometry does not shift when the colour changes. */
+  .row::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--c);
+  }
+
+  .row:hover { background: var(--raise); }
+  .row[aria-pressed="true"] { background: var(--sunk); }
+  .row.static { cursor: default; }
+  .row.static:hover { background: transparent; }
+
+  .rank {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .id { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+
+  .id b {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 650;
+    letter-spacing: .01em;
+  }
+
+  .sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11.5px;
+    color: var(--ink-2);
+  }
+
+  .sub i { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* The group's own centre — the fund with the smallest total distance to the
+     rest of its group. A ring on the ticker, not a name for the group. */
+  .med {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    border: 2px solid var(--c);
+  }
+
+  /* Already holding something that moves like this one. */
+  .dot {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ink-2);
+  }
+
+  .n {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+
+  .n.score { font-size: 14px; font-weight: 650; color: var(--ink); letter-spacing: -.01em; }
+
+  .peek {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .peek:hover { color: var(--ink); }
+  .peek::after { content: "▸"; display: block; transition: transform .12s ease; }
+  .peek[aria-expanded="true"]::after { transform: rotate(90deg); }
+
+  /* ---------- look-through ---------- */
+  .look {
+    background: var(--raise);
+    border-bottom: 1px solid var(--rule);
+    padding: 12px 14px 14px 14px;
+  }
+
+  .look h3 {
+    margin: 0 0 8px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .compare { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 11px; }
+  .compare div { display: flex; flex-direction: column; gap: 0; }
+  .compare dt { font-size: 10px; color: var(--muted); letter-spacing: .04em; }
+  .compare dd { margin: 0; font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+  /* Same column geometry as a board row, so a holding's score sits directly
+     under the fund's own. */
+  .hold { display: grid; grid-template-columns: 30px minmax(0, 1fr) 62px 50px; gap: 10px; align-items: baseline; padding: 3px 0; }
+  .hold.lbl span { font-size: 9.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+  .hold + .hold:not(.lbl) { border-top: 1px solid var(--rule); }
+  .hold.lbl + .hold { border-top: 0; }
+  .hold b { font-family: var(--mono); font-size: 12px; font-weight: 650; }
+  .hold i { font-style: normal; font-size: 11.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .hold .rank { text-align: right; }
+
+  /* ---------- basket rail ---------- */
+  aside h2 {
+    margin: 0;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .rail-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 0 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .quiet {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    padding: 2px 0;
+    cursor: pointer;
+  }
+
+  .quiet:hover { color: var(--ink); }
+
+  .rail-opts { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 0; }
+
+  .sum-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: var(--ink-2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .sum-row b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+
+  .held { display: grid; grid-template-columns: minmax(0, 1fr) 56px; gap: 8px; align-items: center; padding: 6px 0 6px 9px; position: relative; border-bottom: 1px solid var(--rule); }
+  .held::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
+  .held b { font-family: var(--mono); font-size: 12px; font-weight: 650; }
+  .held i { font-style: normal; font-size: 11px; color: var(--ink-2); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .held .n { font-size: 13px; font-weight: 650; color: var(--ink); }
+
+  .empty { margin: 14px 0; color: var(--muted); font-size: 12px; }
+
+  /* ---------- method ---------- */
+  .method { margin-top: 34px; border-top: 1px solid var(--rule); padding-top: 14px; }
+  .method summary { cursor: pointer; font-size: 12px; color: var(--ink-2); }
+  .method p { max-width: 72ch; color: var(--ink-2); font-size: 12.5px; }
+  .method code { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+
+  @media (max-width: 560px) {
+    .colhead, .row { grid-template-columns: 26px minmax(0, 1fr) 58px 44px 24px; }
+    .hide-narrow { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="page">
+  <header class="mast">
+    <div>
+      <h1>Thematic ETF Board</h1>
+      <p class="lede">Every fund in the list, ranked on volatility-adjusted momentum and coloured by
+        the correlation group it belongs to. The groups are read off the returns, not off the theme
+        names &mdash; two funds share a colour because they move together.</p>
+    </div>
+    <dl class="facts">
+      <div><dt>Funds</dt><dd id="f-n"></dd></div>
+      <div><dt>Groups</dt><dd id="f-k"></dd></div>
+      <div><dt>As of</dt><dd id="f-date"></dd></div>
+    </dl>
+  </header>
+
+  <div class="strip">
+    <div class="swarm" id="swarm"></div>
+    <div class="axis"><span id="ax-lo"></span><span id="ax-mid">Score</span><span id="ax-hi"></span></div>
+  </div>
+
+  <div class="bar">
+    <input id="q" type="search" placeholder="Search ticker or theme" aria-label="Search ticker or theme">
+    <select id="theme" aria-label="Theme"></select>
+    <div class="seg"><span>Group by</span><div role="group" aria-label="Group by">
+      <button type="button" data-arrange="rank">Rank</button>
+      <button type="button" data-arrange="group">Colour</button>
+      <button type="button" data-arrange="theme">Theme</button>
+    </div></div>
+    <div class="seg" id="kseg"><span>Into</span><div role="group" aria-label="Number of groups"></div></div>
+    <div class="seg"><span>Window</span><div role="group" aria-label="Window start">
+      <button type="button" data-metric="0">Blend</button>
+      <button type="button" data-metric="1">12 mo</button>
+      <button type="button" data-metric="2">6 mo</button>
+    </div></div>
+    <div class="seg"><span>Skip</span><div role="group" aria-label="Skip">
+      <button type="button" data-skip="0" title="No skip: the window runs to the latest close">0%</button>
+      <button type="button" data-skip="1" title="10 trading days, about half a trading month">50%</button>
+      <button type="button" data-skip="2" title="21 trading days, one trading month — the conventional 12-1 / 6-1 definition">100%</button>
+    </div></div>
+  </div>
+
+  <div class="body">
+    <main>
+      <div class="colhead">
+        <span>#</span>
+        <span class="l">Fund</span>
+        <button type="button" data-sort="score" data-dir="↓" aria-pressed="true" id="h-score">Blend</button>
+        <button type="button" data-sort="ret" data-dir="↓" aria-pressed="false" class="hide-narrow">Ret</button>
+        <button type="button" data-sort="vol" data-dir="↑" aria-pressed="false">Vol</button>
+        <span></span>
+      </div>
+      <div id="board"></div>
+    </main>
+
+    <aside>
+      <div class="rail-head">
+        <h2 id="rail-title">Basket</h2>
+        <button type="button" class="quiet" id="clear" hidden>Clear</button>
+      </div>
+      <div class="rail-opts" id="rail-opts" hidden>
+        <div class="seg"><span>Weights</span><div role="group" aria-label="Weighting">
+          <button type="button" data-weight="eq">Equal</button>
+          <button type="button" data-weight="iv" title="Inverse volatility: weight proportional to 1/σ, on the volatility the Vol column shows">Inv vol</button>
+        </div></div>
+        <div class="seg"><span>Show</span><div role="group" aria-label="Weight display">
+          <button type="button" data-display="pct">%</button>
+          <button type="button" data-display="cash" title="Cash per holding in a hypothetical $10,000 book">$10k</button>
+        </div></div>
+      </div>
+      <div id="rail"></div>
+    </aside>
+  </div>
+
+  <details class="method">
+    <summary>How the colours and the scores are made</summary>
+    <p><b>Score.</b> Annualised return over annualised volatility, measured on a window with two
+      edges. <b>Window</b> picks where it opens &mdash; 12 months back, 6 months back, or the mean of
+      both windows' scores. <b>Skip</b> picks how far short of today it closes: 0, 10 or 21 trading
+      days. The skip is the &ldquo;&minus;1&rdquo; in 12&ndash;1, and it is worth being able to switch
+      off &mdash; a fund can rank badly on a window that closed a month ago and still be up since.</p>
+    <p><b>Colour.</b> Each fund ships 252 synchronised daily returns. Those give a 89&nbsp;&times;&nbsp;89
+      correlation matrix, turned into distances with <code>&radic;((1&minus;&rho;)/2)</code> and grouped
+      by k&#8209;medoids: every fund sits with its nearest centre, and the centres move until the total
+      within-group distance stops falling. The centre of each group is ringed in its row. Colour is
+      anchored on the 8&#8209;group run, so changing the count splits a group rather than repainting the
+      page, and past eight groups the smallest wear a neutral grey &mdash; a ninth hue is never invented.</p>
+    <p><b>The dot</b> beside a ticker means it correlates 0.60 or higher with something already in the
+      basket &mdash; the question &ldquo;do I own this already?&rdquo;, asked pairwise rather than
+      against the basket average. <b>The chevron</b> opens a fund's top holdings, each carrying its own
+      rank and score from the stock universe as of <span id="m-stocks"></span>.</p>
+  </details>
+</div>
+
+<script>
+  const DATA = __DATA__;
+  const FUNDS = DATA.funds;
+  const N = FUNDS.length;
+  const T = 252;            // daily returns per vector
+  const CORR_FLAG = 0.60;   // pairwise, against anything held
+  const PORTFOLIO = 10000;  // the hypothetical book cash display sizes against
+
+  const METRICS = ["Blend", "12 mo", "6 mo"];
+  const SLOTS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7", "--s8"];
+  const colourOf = (slot) => `var(${slot >= 0 && slot < SLOTS.length ? SLOTS[slot] : "--other"})`;
+
+  const $ = (id) => document.getElementById(id);
+
+  /* ---------- state ---------- */
+  const state = {
+    q: "", theme: "", arrange: "rank", k: DATA.referenceK,
+    metric: 0, skip: 2, sort: "score", desc: true,
+    weight: "iv", display: "pct", open: null,
+  };
+
+  const KEY = "etfs-board";
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) ?? "{}");
+    if (DATA.ks.includes(saved.k)) state.k = saved.k;
+    if ([0, 1, 2].includes(saved.metric)) state.metric = saved.metric;
+    if ([0, 1, 2].includes(saved.skip)) state.skip = saved.skip;
+    if (["rank", "group", "theme"].includes(saved.arrange)) state.arrange = saved.arrange;
+    if (["eq", "iv"].includes(saved.weight)) state.weight = saved.weight;
+    if (["pct", "cash"].includes(saved.display)) state.display = saved.display;
+  } catch {}
+
+  const persist = () => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        k: state.k, metric: state.metric, skip: state.skip,
+        arrange: state.arrange, weight: state.weight, display: state.display,
+      }));
+    } catch {}
+  };
+
+  const picked = new Set();
+  try { for (const y of JSON.parse(localStorage.getItem("etfs-basket") ?? "[]")) picked.add(y); } catch {}
+  const saveBasket = () => {
+    try { localStorage.setItem("etfs-basket", JSON.stringify([...picked])); } catch {}
+  };
+
+  /* ---------- the window, as two edges ----------
+     Every fund ships annualised return and volatility at each skip x lookback,
+     flattened skip-major. Score is a division, so it is derived here rather
+     than shipped as a third array; the blend averages the two lookbacks'
+     scores, which is not the same number as their summed returns over their
+     summed volatilities. */
+  const pick = (a) => {
+    const base = state.skip * 2;
+    if (state.metric === 1) return a[base];
+    if (state.metric === 2) return a[base + 1];
+    return (a[base] + a[base + 1]) / 2;
+  };
+  const rt = (s) => pick(s.rt);
+  const vl = (s) => pick(s.vl);
+  const sc = (s) => {
+    const base = state.skip * 2;
+    if (state.metric === 1) return s.rt[base] / s.vl[base];
+    if (state.metric === 2) return s.rt[base + 1] / s.vl[base + 1];
+    return (s.rt[base] / s.vl[base] + s.rt[base + 1] / s.vl[base + 1]) / 2;
+  };
+
+  const fmtScore = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
+  const fmtPct = (v) => (v < 0 ? "−" : "") + Math.abs(v * 100).toFixed(0) + "%";
+
+  /* ---------- return vectors ----------
+     252 standardised daily log returns per fund, int8 in base64. Re-centre and
+     re-normalise on decode and the dot product of two vectors is exactly their
+     correlation. */
+  const VEC = (() => {
+    const out = new Float32Array(N * T);
+    const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const idx = new Uint8Array(128);
+    for (let i = 0; i < 64; i++) idx[B64.charCodeAt(i)] = i;
+
+    for (let s = 0; s < N; s++) {
+      const str = FUNDS[s].c;
+      const off = s * T;
+      let out_i = 0;
+      for (let i = 0; i + 3 < str.length && out_i < T; i += 4) {
+        const n = (idx[str.charCodeAt(i)] << 18) | (idx[str.charCodeAt(i + 1)] << 12) |
+                  (idx[str.charCodeAt(i + 2)] << 6) | idx[str.charCodeAt(i + 3)];
+        for (const byte of [(n >> 16) & 255, (n >> 8) & 255, n & 255]) {
+          if (out_i < T) out[off + out_i++] = byte > 127 ? byte - 256 : byte;
+        }
+      }
+      let mean = 0;
+      for (let t = 0; t < T; t++) mean += out[off + t];
+      mean /= T;
+      let ss = 0;
+      for (let t = 0; t < T; t++) { out[off + t] -= mean; ss += out[off + t] * out[off + t]; }
+      const norm = Math.sqrt(ss) || 1;
+      for (let t = 0; t < T; t++) out[off + t] /= norm;
+    }
+    return out;
+  })();
+
+  function rho(a, b) {
+    let d = 0;
+    const oa = a * T;
+    const ob = b * T;
+    for (let t = 0; t < T; t++) d += VEC[oa + t] * VEC[ob + t];
+    return d;
+  }
+
+  const maxRho = new Float32Array(N);
+  const maxWith = new Int32Array(N);
+
+  function recomputeFlags() {
+    maxRho.fill(-2);
+    maxWith.fill(-1);
+    const h = held();
+    if (!h.length) return;
+    for (let i = 0; i < N; i++) {
+      if (picked.has(FUNDS[i].y)) continue; // already in; nothing to warn about
+      for (const x of h) {
+        const r = rho(i, x.i);
+        if (r > maxRho[i]) { maxRho[i] = r; maxWith[i] = x.i; }
+      }
+    }
+  }
+
+  /* ---------- groups ---------- */
+  const kIndex = new Map(DATA.ks.map((k, i) => [k, i]));
+  const run = () => DATA.groups[state.k];
+  const groupOf = (s) => run().groups[s.g[kIndex.get(state.k)]];
+  const colourFor = (s) => colourOf(groupOf(s).slot);
+
+  const ITEMS = FUNDS.map((f, i) => ({ ...f, i, theme: DATA.themes[f.t] }));
+  const held = () => ITEMS.filter((s) => picked.has(s.y));
+
+  /* ---------- weights ----------
+     Both size off numbers already on the page, so either can be checked
+     against the board with a pencil. */
+  function weights(rows) {
+    const n = rows.length;
+    if (!n) return [];
+    if (state.weight === "eq") return rows.map((s) => ({ s, w: 1 / n }));
+    // Sizing uses the blended volatility: switching what you read must not
+    // change how the basket is built.
+    const inv = rows.map((s) => 1 / Math.max(vl(s), 1e-6));
+    const total = inv.reduce((a, b) => a + b, 0);
+    return rows.map((s, i) => ({ s, w: inv[i] / total }));
+  }
+
+  /** Whole units summing to exactly `total` — largest remainder. A column of
+      weights is a thing readers add up, and rounding each row alone does not. */
+  function apportion(ws, total) {
+    const raw = ws.map((w) => w * total);
+    const base = raw.map(Math.floor);
+    let left = Math.round(total - base.reduce((a, b) => a + b, 0));
+    const order = raw.map((v, i) => [v - base[i], i]).sort((a, b) => b[0] - a[0]);
+    for (let k = 0; k < order.length && left > 0; k++, left--) base[order[k][1]]++;
+    return base;
+  }
+
+  /* ---------- selection ---------- */
+  function selected() {
+    let out = ITEMS;
+    if (state.theme) out = out.filter((s) => s.theme === state.theme);
+    if (state.q) {
+      out = out.filter((s) => s.y.toLowerCase().includes(state.q) || s.n.toLowerCase().includes(state.q));
+    }
+    const f = { score: sc, ret: rt, vol: vl }[state.sort];
+    return out.slice().sort((a, b) => (state.desc ? f(b) - f(a) : f(a) - f(b)));
+  }
+
+  /* ---------- rendering pieces ---------- */
+  function cell(text, cls) {
+    const el = document.createElement("span");
+    el.className = "n" + (cls ? " " + cls : "");
+    el.textContent = text;
+    return el;
+  }
+
+  function rowFor(s, ordinal) {
+    // A row holds the look-through control, and a button inside a button is
+    // invalid markup that browsers are free to reparent — so the row states its
+    // role rather than being one.
+    const b = document.createElement("div");
+    b.setAttribute("role", "button");
+    b.tabIndex = 0;
+    b.className = "row";
+    b.style.setProperty("--c", colourFor(s));
+    b.setAttribute("aria-pressed", String(picked.has(s.y)));
+    b.dataset.sym = s.y;
+
+    const rank = document.createElement("span");
+    rank.className = "rank";
+    rank.textContent = ordinal;
+    b.append(rank);
+
+    const id = document.createElement("span");
+    id.className = "id";
+    const tkr = document.createElement("b");
+    tkr.textContent = s.y;
+
+    const sub = document.createElement("span");
+    sub.className = "sub";
+    const nm = document.createElement("i");
+    nm.textContent = s.n;
+    sub.append(nm);
+
+    if (groupOf(s).medoid === s.i) {
+      const ring = document.createElement("span");
+      ring.className = "med";
+      ring.title = "the centre of its colour group";
+      ring.setAttribute("role", "img");
+      ring.setAttribute("aria-label", "centre of its colour group");
+      sub.append(ring);
+    }
+
+    if (maxRho[s.i] >= CORR_FLAG && maxWith[s.i] >= 0) {
+      const label = `correlates ${maxRho[s.i].toFixed(2)} with ${FUNDS[maxWith[s.i]].y}, which you hold`;
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.title = label;
+      dot.setAttribute("role", "img");
+      dot.setAttribute("aria-label", label);
+      sub.append(dot);
+    }
+
+    id.append(tkr, sub);
+    b.append(id);
+
+    b.append(cell(fmtScore(sc(s)), "score"));
+    const ret = cell(fmtPct(rt(s)));
+    ret.classList.add("hide-narrow");
+    b.append(ret);
+    b.append(cell(fmtPct(vl(s))));
+
+    // The row selects; the chevron looks through. Two jobs, two hit targets.
+    const slot = document.createElement("span");
+    if (s.h) {
+      const peek = document.createElement("button");
+      peek.type = "button";
+      peek.className = "peek";
+      peek.setAttribute("aria-expanded", String(state.open === s.y));
+      peek.setAttribute("aria-label", `${state.open === s.y ? "Hide" : "Show"} ${s.y} holdings`);
+      peek.addEventListener("click", (e) => {
+        e.stopPropagation();
+        state.open = state.open === s.y ? null : s.y;
+        render();
+      });
+      slot.append(peek);
+    }
+    b.append(slot);
+
+    const toggle = () => {
+      if (picked.has(s.y)) picked.delete(s.y); else picked.add(s.y);
+      saveBasket();
+      recomputeFlags();
+      render();
+    };
+    b.addEventListener("click", toggle);
+    b.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      toggle();
+    });
+    return b;
+  }
+
+  /** A fund's top holdings, each with its own rank and score in the stock
+      universe. The gap between the two blends is the point: a fund of seventy
+      names carries a fraction of its average constituent's volatility, and the
+      score is a return divided by exactly that. */
+  function lookFor(s) {
+    const wrap = document.createElement("div");
+    wrap.className = "look";
+
+    const h = document.createElement("h3");
+    h.textContent = `${s.y} — top ${s.h.length} holdings`;
+    wrap.append(h);
+
+    const hit = s.h.filter((row) => row.length > 3);
+    const listed = s.h.reduce((t, [, wt]) => t + wt, 0);
+    const mw = hit.reduce((t, [, wt]) => t + wt, 0);
+    const at = state.metric * 3 + state.skip;
+    const scoreOf = (row) => {
+      const base = state.skip * 2;
+      if (state.metric === 1) return row[3][base] / row[4][base];
+      if (state.metric === 2) return row[3][base + 1] / row[4][base + 1];
+      return (row[3][base] / row[4][base] + row[3][base + 1] / row[4][base + 1]) / 2;
+    };
+    const volOf = (row) => pick(row[4]);
+
+    const facts = document.createElement("dl");
+    facts.className = "compare";
+    const stat = (k, v) => {
+      const d = document.createElement("div");
+      const dt = document.createElement("dt");
+      dt.textContent = k;
+      const dd = document.createElement("dd");
+      dd.textContent = v;
+      d.append(dt, dd);
+      facts.append(d);
+    };
+    stat(`${s.y} ${METRICS[state.metric].toLowerCase()}`, fmtScore(sc(s)));
+    if (mw > 0) {
+      stat("Holdings blend", fmtScore(hit.reduce((t, r) => t + r[1] * scoreOf(r), 0) / mw));
+      stat("Holdings vol", fmtPct(hit.reduce((t, r) => t + r[1] * volOf(r), 0) / mw));
+      stat(`${s.y} vol`, fmtPct(vl(s)));
+    }
+    stat("Listed weight", listed.toFixed(1) + "% of fund");
+    wrap.append(facts);
+
+    const labels = document.createElement("div");
+    labels.className = "hold lbl";
+    for (const [text, align] of [["#", "right"], ["Holding", "left"], [METRICS[state.metric], "right"], ["Wt", "right"]]) {
+      const el = document.createElement("span");
+      el.textContent = text;
+      el.style.textAlign = align;
+      labels.append(el);
+    }
+    wrap.append(labels);
+
+    for (const row of s.h) {
+      const line = document.createElement("div");
+      line.className = "hold";
+
+      const rank = document.createElement("span");
+      rank.className = "rank num";
+      rank.textContent = row.length > 3 ? "#" + row[5][at] : "—";
+      line.append(rank);
+
+      const id = document.createElement("span");
+      const tkr = document.createElement("b");
+      tkr.textContent = row[0];
+      const nm = document.createElement("i");
+      // A miss says only what is known: some sit under the liquidity floor,
+      // CRAK's are foreign lines that were never candidates.
+      nm.textContent = row[2];
+      id.append(tkr, nm);
+      line.append(id);
+
+      line.append(cell(row.length > 3 ? fmtScore(scoreOf(row)) : "—", "score"));
+      line.append(cell(row[1].toFixed(2) + "%"));
+      wrap.append(line);
+    }
+    return wrap;
+  }
+
+  /* ---------- the strip ---------- */
+  function renderSwarm() {
+    const swarm = $("swarm");
+    swarm.textContent = "";
+    const rows = ITEMS.map((s) => ({ s, v: sc(s) })).sort((a, b) => a.v - b.v);
+    const lo = rows[0].v;
+    const hi = rows[rows.length - 1].v;
+    const span = hi - lo || 1;
+
+    // Stack marks that would otherwise land on top of each other. The mark is
+    // 7px wide however wide the strip is, so the collision test is measured
+    // rather than assumed — at 390px a fixed percentage would let them overlap.
+    const width = swarm.clientWidth || 660;
+    const MARK_PX = 7;
+    const LANE = 9;
+    const MARK = ((MARK_PX + 2) / width) * 100;
+    const lanes = [];
+    for (const r of rows) {
+      const x = ((r.v - lo) / span) * 100;
+      let lane = 0;
+      while (lanes[lane] !== undefined && x - lanes[lane] < MARK) lane++;
+      lanes[lane] = x;
+      r.x = x;
+      r.lane = lane;
+    }
+    const depth = Math.max(...rows.map((r) => r.lane)) + 1;
+    swarm.style.height = Math.max(56, depth * LANE + MARK_PX + 4) + "px";
+
+    for (const r of rows) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.style.left = `calc(${r.x}% * (1 - 0.012) + 0.6%)`;
+      // Lanes stack upward from the axis, so a crowded score reads as height.
+      b.style.bottom = `${r.lane * LANE + 2}px`;
+      b.style.setProperty("--c", colourFor(r.s));
+      if (picked.has(r.s.y)) b.dataset.held = "1";
+      const g = groupOf(r.s);
+      b.title = `${r.s.y} — ${r.s.n} · ${fmtScore(r.v)} · group of ${g.n}, mean correlation ${g.rho.toFixed(2)}`;
+      b.setAttribute("aria-label", b.title);
+      b.addEventListener("click", () => {
+        state.q = "";
+        $("q").value = "";
+        state.open = r.s.h ? r.s.y : state.open;
+        render();
+        const row = document.querySelector(`.row[data-sym="${r.s.y}"]`);
+        if (row) { row.scrollIntoView({ block: "center", behavior: "smooth" }); row.focus({ preventScroll: true }); }
+      });
+      swarm.append(b);
+    }
+
+    $("ax-lo").textContent = fmtScore(lo);
+    $("ax-hi").textContent = fmtScore(hi);
+    $("ax-mid").textContent = METRICS[state.metric] + (state.skip === 2 ? "" : " · skip " + ["0%", "50%", "100%"][state.skip]);
+  }
+
+  /* ---------- the board ---------- */
+  function band(colour, title, note) {
+    const d = document.createElement("div");
+    d.className = "band";
+    d.style.setProperty("--c", colour);
+    const sw = document.createElement("span");
+    sw.className = "sw";
+    d.append(sw);
+    const b = document.createElement("b");
+    b.textContent = title;
+    d.append(b);
+    if (note) {
+      const s = document.createElement("span");
+      s.textContent = note;
+      d.append(s);
+    }
+    return d;
+  }
+
+  function renderBoard() {
+    const rows = selected();
+    const board = $("board");
+    board.textContent = "";
+
+    if (!rows.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = "Nothing matches.";
+      board.append(p);
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    const emit = (list, offset) => {
+      list.forEach((s, i) => {
+        frag.append(rowFor(s, offset + i + 1));
+        if (state.open === s.y && s.h) frag.append(lookFor(s));
+      });
+    };
+
+    if (state.arrange === "rank") {
+      emit(rows, 0);
+    } else if (state.arrange === "group") {
+      // Bands run in slot order so the colours arrive in the palette's own
+      // sequence rather than in whatever order the filter left behind.
+      const gs = run().groups;
+      gs.forEach((g, gi) => {
+        const mine = rows.filter((s) => s.g[kIndex.get(state.k)] === gi);
+        if (!mine.length) return;
+        frag.append(band(colourOf(g.slot), `${mine.length}${mine.length === g.n ? "" : " of " + g.n} funds`,
+          `mean correlation ${g.rho.toFixed(2)} · centre ${FUNDS[g.medoid].y}`));
+        emit(mine, 0);
+      });
+    } else {
+      const byTheme = new Map();
+      for (const s of rows) {
+        if (!byTheme.has(s.theme)) byTheme.set(s.theme, []);
+        byTheme.get(s.theme).push(s);
+      }
+      // Theme order follows the source list — it is editorial, running broad
+      // sectors first and niches last — not the count.
+      for (const name of DATA.themes) {
+        const mine = byTheme.get(name);
+        if (!mine) continue;
+        frag.append(band("transparent", name, `${mine.length} fund${mine.length === 1 ? "" : "s"}`));
+        emit(mine, 0);
+      }
+    }
+    board.append(frag);
+  }
+
+  /* ---------- the basket rail ---------- */
+  function renderRail() {
+    const rows = held();
+    const rail = $("rail");
+    rail.textContent = "";
+    $("rail-title").textContent = rows.length ? `Basket · ${rows.length}` : "Basket";
+    $("clear").hidden = !rows.length;
+    $("rail-opts").hidden = !rows.length;
+
+    if (!rows.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = "Pick a row to add it. Rows you hold get a ring on the strip above, and anything correlating 0.60 or more with them gets a dot.";
+      rail.append(p);
+      return;
+    }
+
+    const w = weights(rows);
+    w.sort((a, b) => sc(b.s) - sc(a.s));
+    const cash = state.display === "cash";
+    const parts = apportion(w.map((x) => x.w), cash ? PORTFOLIO : 100);
+    const fmtWeight = (i) => (cash ? "$" + parts[i].toLocaleString("en-US") : parts[i] + "%");
+
+    const line = (k, v) => {
+      const row = document.createElement("div");
+      row.className = "sum-row";
+      const a = document.createElement("span");
+      a.textContent = k;
+      const b = document.createElement("b");
+      b.textContent = v;
+      row.append(a, b);
+      rail.append(row);
+    };
+
+    const avg = rows.reduce((t, s) => t + sc(s), 0) / rows.length;
+    line("Avg " + METRICS[state.metric].toLowerCase(), fmtScore(avg));
+    line("Weighted vol", fmtPct(w.reduce((t, x) => t + x.w * vl(x.s), 0)));
+
+    // How many distinct colour groups the basket spans — the diversification
+    // question the page is actually built to answer.
+    const spread = new Set(rows.map((s) => s.g[kIndex.get(state.k)]));
+    line("Colour groups", `${spread.size} of ${run().groups.length}`);
+
+    // The worst pair inside the basket itself. A basket can look spread across
+    // groups and still hold one duplicated position.
+    if (rows.length > 1) {
+      let worst = -2;
+      let pair = null;
+      for (let a = 0; a < rows.length; a++) {
+        for (let b = a + 1; b < rows.length; b++) {
+          const r = rho(rows[a].i, rows[b].i);
+          if (r > worst) { worst = r; pair = [rows[a].y, rows[b].y]; }
+        }
+      }
+      line("Closest pair", `${pair[0]}·${pair[1]} ${worst.toFixed(2)}`);
+    }
+
+    w.forEach((x, i) => {
+      const row = document.createElement("div");
+      row.className = "held";
+      row.style.setProperty("--c", colourFor(x.s));
+      const id = document.createElement("span");
+      const tkr = document.createElement("b");
+      tkr.textContent = x.s.y;
+      const nm = document.createElement("i");
+      nm.textContent = x.s.n;
+      id.append(tkr, nm);
+      row.append(id, cell(fmtWeight(i)));
+      rail.append(row);
+    });
+  }
+
+  /* ---------- controls ---------- */
+  const themeSel = $("theme");
+  {
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = "All themes";
+    themeSel.append(all);
+    for (const name of DATA.themes) {
+      const o = document.createElement("option");
+      o.value = name;
+      o.textContent = name;
+      themeSel.append(o);
+    }
+  }
+  themeSel.addEventListener("change", () => { state.theme = themeSel.value; state.open = null; render(); });
+
+  {
+    const box = $("kseg").querySelector("div");
+    for (const k of DATA.ks) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.k = String(k);
+      b.textContent = String(k);
+      b.addEventListener("click", () => { state.k = k; persist(); render(); });
+      box.append(b);
+    }
+  }
+
+  let timer;
+  $("q").addEventListener("input", (e) => {
+    clearTimeout(timer);
+    const v = e.target.value.trim().toLowerCase();
+    timer = setTimeout(() => { state.q = v; render(); }, 120);
+  });
+
+  for (const b of document.querySelectorAll("[data-arrange]")) {
+    b.addEventListener("click", () => { state.arrange = b.dataset.arrange; persist(); render(); });
+  }
+  for (const b of document.querySelectorAll("[data-metric]")) {
+    b.addEventListener("click", () => { state.metric = +b.dataset.metric; persist(); render(); });
+  }
+  for (const b of document.querySelectorAll("[data-skip]")) {
+    b.addEventListener("click", () => { state.skip = +b.dataset.skip; persist(); render(); });
+  }
+  for (const b of document.querySelectorAll("[data-weight]")) {
+    b.addEventListener("click", () => { state.weight = b.dataset.weight; persist(); render(); });
+  }
+  for (const b of document.querySelectorAll("[data-display]")) {
+    b.addEventListener("click", () => { state.display = b.dataset.display; persist(); render(); });
+  }
+  for (const b of document.querySelectorAll("[data-sort]")) {
+    b.addEventListener("click", () => {
+      // The same column flips direction; a new one opens on its natural side —
+      // high score and return first, low volatility first.
+      if (state.sort === b.dataset.sort) state.desc = !state.desc;
+      else { state.sort = b.dataset.sort; state.desc = b.dataset.sort !== "vol"; }
+      render();
+    });
+  }
+  $("clear").addEventListener("click", () => {
+    picked.clear();
+    saveBasket();
+    recomputeFlags();
+    render();
+  });
+
+  /* ---------- render ---------- */
+  function render() {
+    const press = (sel, on) => {
+      for (const b of document.querySelectorAll(sel)) b.setAttribute("aria-pressed", String(on(b)));
+    };
+    press("[data-arrange]", (b) => b.dataset.arrange === state.arrange);
+    press("[data-k]", (b) => +b.dataset.k === state.k);
+    press("[data-metric]", (b) => +b.dataset.metric === state.metric);
+    press("[data-skip]", (b) => +b.dataset.skip === state.skip);
+    press("[data-weight]", (b) => b.dataset.weight === state.weight);
+    press("[data-display]", (b) => b.dataset.display === state.display);
+    press("[data-sort]", (b) => b.dataset.sort === state.sort);
+    for (const b of document.querySelectorAll("[data-sort]")) {
+      if (b.dataset.sort === state.sort) b.dataset.dir = state.desc ? "↓" : "↑";
+    }
+
+    // Only the colour arrangement is cut into k groups; under Rank or Theme the
+    // count has nothing to choose.
+    $("kseg").hidden = state.arrange !== "group";
+    $("h-score").textContent = METRICS[state.metric];
+    $("f-k").textContent = state.k;
+
+    renderSwarm();
+    renderBoard();
+    renderRail();
+  }
+
+  // The control bar wraps at some widths; the rail's sticky offset follows it.
+  const bar = document.querySelector(".bar");
+  const measure = () => document.documentElement.style.setProperty("--bar-h", bar.offsetHeight + "px");
+  measure();
+  if (window.ResizeObserver) new ResizeObserver(measure).observe(bar);
+  else addEventListener("resize", measure);
+
+  // The swarm's lanes are computed against the strip's pixel width, so a resize
+  // has to lay them out again.
+  let swarmTimer;
+  addEventListener("resize", () => {
+    clearTimeout(swarmTimer);
+    swarmTimer = setTimeout(renderSwarm, 120);
+  });
+
+  $("f-n").textContent = N;
+  $("f-date").textContent = DATA.asOf.slice(5);
+  $("m-stocks").textContent = DATA.stocksAsOf;
+  recomputeFlags();
+  render();
+</script>

@@ -3,14 +3,17 @@
 Every tradeable US stock — 1,500 after cleaning — plus 89 thematic ETFs, in one
 list, ranked on volatility-adjusted 12-1 and 6-1 momentum. Tap to build a
 basket; it sizes itself equally or by inverse volatility, in percent or in
-cash, and flags names that duplicate something already in it. Output is a single
-self-contained HTML page built for a phone — 803 KB, no network requests.
+cash, and flags names that duplicate something already in it. Output is
+self-contained HTML — no network requests — in two pages: `dist/ranks.html`, the
+phone-shaped list over both universes (803 KB), and `dist/etfs.html`, a
+desktop board for the 89 funds on their own (94 KB).
 
 ```
-npm run build        # refresh prices, rescore, regenerate dist/ranks.html
+npm run build        # refresh prices, rescore, regenerate both pages
 npm run data         # stocks only    -> data/ranks.json
 npm run etfs         # funds only     -> data/etfs.json
 npm run render       # inline + write -> dist/ranks.html
+npm run board        # inline + write -> dist/etfs.html
 npm run etf:check    # is every fund in the list still trading?
 ```
 
@@ -202,8 +205,11 @@ src/momentum.js          the windowing, scoring and vector math, shared by both 
 src/ranks-build.js       universe -> prices -> scores + return vectors -> data/ranks.json
 src/etf-universe.js      the thematic fund list, as ordered groups
 src/etf-holdings.js      hand-kept top holdings per fund, resolved at render time
-src/ranks-template.html  the page; __DATA__ is the injection point
+src/ranks-template.html  the combined page; __DATA__ is the injection point
 src/ranks-render.js      inlines the JSON, writes dist/ranks.html
+src/cluster.js           k-medoids over the fund correlation matrix, run at build time
+src/etfs-template.html   the ETF board; same injection point
+src/etfs-render.js       clusters, resolves holdings, writes dist/etfs.html
 ```
 
 `dist/ranks.html` is fully self-contained — the data is embedded, there are no
@@ -346,3 +352,83 @@ list as given rather than quietly swapped, and recorded in `ETF_ISSUES`:
 | `PBS` | Quotes but no adjusted history. Invesco Dynamic Media, ~2k shares/day — effectively untradeable. |
 | `BJK` | Stopped trading; last bar 2026-05-18. |
 | `EATZ` | Stopped trading; last bar 2026-05-07. |
+
+# The ETF board
+
+`dist/etfs.html` is the fund universe on its own page. It exists because 89
+names is a different problem from 1,500: the whole universe fits on one screen,
+which lets the page do two things the combined list cannot.
+
+The first is the **strip** at the top — every fund as one mark, positioned by
+score and coloured by its correlation group, stacked where marks would collide.
+The shape of the ranking and how the groups sit inside it read before any row
+does. Clicking a mark scrolls to its row.
+
+The second is that **colour means one thing**. Nothing else on the page is
+coloured — a score states its sign with a `+` or `−` rather than a green or a
+red — so a rail down the side of a row always answers the same question: which
+group of funds does this one move with?
+
+Layout follows from that. The board is a wide table with a persistent basket
+rail rather than a tab, the window and skip controls sit in one bar above it,
+and the look-through opens inline under its fund instead of taking over the
+view. Weights and cash/percent live in the rail, next to the only thing they
+change.
+
+## The groups
+
+`src/cluster.js` runs the six steps at build time — PAM is O(k·N²) per swap pass
+and there is nothing about it a reader can change, so it belongs in the build
+alongside the scores:
+
+1. synchronised daily returns — the shipped vectors are the same 252 sessions
+   for every fund, so this holds by construction
+2. the 89 × 89 correlation matrix, a dot product of unit-norm vectors
+3. correlation to distance, `√((1−ρ)/2)` — a proper metric: identical 0,
+   uncorrelated 0.707, opposed 1
+4. PAM — greedy BUILD, then exhaustive SWAP until no swap improves
+5. three cuts, 5 / 8 / 10, chosen in the bar
+6. every fund with its nearest medoid, medoids moving until the total
+   within-group distance stops falling
+
+| k | silhouette | within-group distance | sizes |
+|---|---|---|---|
+| 5 | 0.136 | 33.08 | 28, 23, 22, 11, 5 |
+| 8 | 0.145 | 29.57 | 19, 19, 17, 9, 8, 6, 6, 5 |
+| 10 | 0.154 | 27.56 | 19, 16, 14, 8, 8, 6, 5, 5, 5, 3 |
+
+The silhouettes are low in absolute terms, which is the honest reading: these
+funds are one market and the groups are regions of it, not islands. The k=8 run
+is where the structure is most legible — a 19-fund technology-and-electrification
+block at mean ρ 0.65, a 19-fund consumer-and-internet block at 0.54, 17 funds of
+industrials, materials and water at 0.62, and at the tight end six precious- and
+base-metals miners at **0.80**.
+
+### Colour is assigned once, not per cut
+
+The obvious rule — slot by size rank — repaints the whole page every time the
+count changes, because the second-largest group at k=8 is rarely the
+second-largest at k=10. Colour is anchored on the k=8 run instead: each group in
+the other cuts inherits the slot of the reference group it overlaps most,
+largest first. Raising the count then reads as one group splitting rather than
+as a new page. At k=10 the aqua block divides into aqua (16) and violet (8) and
+the orange one sheds its technology half; everything else holds.
+
+Eight hues is the whole palette. Past that a group takes a neutral grey and
+position alone tells it from its neighbour — at k=10 that is the two smallest,
+eight funds between them. A ninth hue is never generated. The eight slots are
+the validated categorical order, checked in both themes; three of the light-mode
+steps sit under 3:1 against the surface, which is why every row carries its
+ticker as ink text and the group's own numbers sit in the band above it.
+
+Group **names** are deliberately absent. The centre of each group — the fund
+with the smallest total distance to the rest — gets a ring on its ticker, and
+the band states size and mean correlation. Naming a group after its medoid
+implies the medoid defines it, which is not what a medoid is.
+
+## What the board adds to the basket
+
+The rail carries two lines the phone page does not: **colour groups**, how many
+distinct groups the basket spans, and **closest pair**, the highest correlation
+between any two names in it. They answer different halves of the same question —
+a basket can look spread across groups and still hold one duplicated position.
