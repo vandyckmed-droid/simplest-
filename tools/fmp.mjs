@@ -57,6 +57,21 @@ async function get(path, params = {}) {
   throw lastError;
 }
 
+/** Every actively traded US common stock matching the given floors. */
+export async function screener(params) {
+  const rows = await get('company-screener', {
+    isEtf: false,
+    isFund: false,
+    isActivelyTrading: true,
+    country: 'US',
+    ...params,
+  });
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error('the screener returned nothing');
+  }
+  return rows;
+}
+
 /** Company name, market cap, exchange. */
 export async function profile(symbol) {
   const rows = await get('profile', { symbol });

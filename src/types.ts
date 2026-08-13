@@ -23,11 +23,15 @@ export interface Stock {
   rank: number;
   symbol: string;
   name: string;
+  /** NYSE, NASDAQ or AMEX (NYSE American). */
+  exchange: string;
   /** Latest adjusted close, in dollars. */
   price: number;
   /** Change from the previous adjusted close, as a fraction. */
   dayChange: number;
   marketCap: number;
+  /** Median daily dollar volume that put this stock in the universe. */
+  medianDollarVolume: number;
   /** Date of the latest close, e.g. "2026-08-12". */
   asOf: string;
   history: History;

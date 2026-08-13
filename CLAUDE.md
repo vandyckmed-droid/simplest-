@@ -73,6 +73,7 @@ Test
 - ✓ **Phase 6** — 12–1 momentum
 - ✓ **Phase 7** — 6–1 momentum + Momentum Blend
 - ✓ **Phase 8** — Ticker-detail interaction
+- ✓ **Phase 9** — 50-stock universe
 
 ## Commands
 

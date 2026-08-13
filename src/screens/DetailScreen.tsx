@@ -34,6 +34,17 @@ interface DetailScreenProps {
 /** Shown where a figure has not been worked out. */
 const PENDING = '—';
 
+/**
+ * How many pages either side of the visible one are filled in.
+ *
+ * The pane elements themselves are all mounted and never move, so nothing
+ * ever restarts an animation. Only their contents wait: filling fifty pages
+ * at once costs well over a second on a mid-range phone. One either side is
+ * enough that the page you swipe to was always already built, so arriving on
+ * it never replays the chart's draw.
+ */
+const NEAR = 1;
+
 /** The three rows describing one momentum window. */
 function windowStats(name: string, window: MomentumWindow | null) {
   return [
@@ -141,12 +152,14 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
               style={{ width: `${paneWidth}%` }}
               aria-hidden={pane !== stock}
             >
-              <TickerPage
-                stock={pane}
-                window={window_}
-                onSelectWindow={setWindow}
-                active={pane === stock}
-              />
+              {Math.abs(pane.rank - stock.rank) <= NEAR && (
+                <TickerPage
+                  stock={pane}
+                  window={window_}
+                  onSelectWindow={setWindow}
+                  active={pane === stock}
+                />
+              )}
             </div>
           ))}
         </div>
