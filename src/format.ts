@@ -45,18 +45,12 @@ export function formatRatio(value: number): string {
   return `${sign}${Math.abs(value).toFixed(2)}`;
 }
 
-/** A percentile as a place, e.g. "89th", "1st", "0th". */
+/**
+ * A percentile written out of 100, e.g. "89 / 100" — clearer at a glance than
+ * an ordinal, which reads like a position in the list rather than a score.
+ */
 export function formatPercentile(percentile: number): string {
-  const whole = Math.round(percentile);
-  const lastTwo = whole % 100;
-  const last = whole % 10;
-  const suffix =
-    lastTwo >= 11 && lastTwo <= 13 ? 'th'
-    : last === 1 ? 'st'
-    : last === 2 ? 'nd'
-    : last === 3 ? 'rd'
-    : 'th';
-  return `${whole}${suffix}`;
+  return `${Math.round(percentile)} / 100`;
 }
 
 /** Momentum blend score, e.g. "96.4". */

@@ -67,8 +67,8 @@ Test
 - ✓ **Phase 0** — Empty repository
 - ✓ **Phase 1** — App shell
 - ✓ **Phase 2** — Ranks
-- ✓ **Phase 3** — Ticker detail
-- ✓ **Phase 4** — Basic portfolio
+- ✓ **Phase 3** — Ticker detail + graph
+- ✓ **Phase 4** — Basic portfolio + equal weights
 - ✓ **Phase 5** — Real market data
 - ✓ **Phase 6** — 12–1 momentum
 

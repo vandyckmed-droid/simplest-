@@ -36,7 +36,8 @@ measurement.
 | 12–1 Rank | `100 × (names with a lower risk-adjusted value) / (count − 1)` |
 
 Ties share the lower percentile, so the weakest name sits at 0 and the
-strongest at 100. A price line that never moves has no risk to divide by, so
+strongest at 100. It is shown out of 100 — "89 / 100" — rather than as an
+ordinal, which would read like a position in the list rather than a score. A price line that never moves has no risk to divide by, so
 its ratio is null rather than astronomical — floating-point noise leaves
 around 1e-16 of "volatility" on a flat series, which is why the guard is a
 small epsilon and not a test against zero.
