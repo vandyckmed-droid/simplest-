@@ -6,21 +6,31 @@ The only actions the product ever offers are **look, sort, filter, inspect,
 select, deselect**. Portfolio weights are never entered by hand — they are
 derived. Every phase is built against that rule.
 
-## Status — Phase 1: App Shell
-
-The visual foundation only. Two screens, bottom navigation, static fake data.
+## Status — Phase 2: Ranks
 
 | Built | Not built yet |
 | --- | --- |
 | iPhone-first layout with safe-area handling | APIs and live data |
-| Ranks screen | Any calculation |
+| Ranks screen: rank, logo, ticker, momentum blend, return | Any calculation |
+| Select / deselect, persisted on the device | Ticker detail |
 | Portfolio screen | Charts |
-| Bottom tab navigation | Sorting, filtering, inspection |
-| Light and dark mode | Selection / deselection |
-| Design tokens and shared row components | Portfolio logic |
+| Bottom tab navigation | Sorting and filtering |
+| Light and dark mode | Portfolio weighting |
+| Design tokens and one shared row | |
 
 All numbers on screen come from `src/data/fixtures.ts` and are literals —
-including the portfolio total and the weights. Nothing is computed.
+the momentum scores, the returns, the portfolio total, the weights. Nothing
+is computed.
+
+### Selection
+
+Tapping the disc on the right selects a stock; tapping it again deselects.
+The chosen symbols live in `localStorage` under `stock-app.selection` and
+survive a reload. Selection changes hue rather than weight — a filled green
+puck would read louder than the ranking it sits beside.
+
+Tapping the row itself is inert for now. It still takes a press state,
+because it opens ticker detail in a later phase.
 
 ## Run it
 
@@ -64,10 +74,13 @@ src/
   useTheme.ts          system scheme, manual override, persistence
   format.ts            money / percent / weight formatting
   types.ts             Stock, Holding, TabId
+  useSelection.ts      chosen symbols, persisted locally
   data/fixtures.ts     all fake data, in one place
   components/
     Screen.tsx         title block, safe areas, section labels
     Row.tsx            the one list row both screens use
+    LogoMark.tsx       logo placeholder
+    SelectControl.tsx  the + / check disc
     TabBar.tsx         bottom navigation
     Icons.tsx          stroke icons
   styles/
@@ -86,6 +99,12 @@ library, no runtime dependencies beyond React.
 ## Verified
 
 Checked in Chromium at iPhone 14 Pro and 320px widths, in light and dark:
-screens render, the tab bar switches and resets scroll, the last row and the
-footnote clear the tab bar, nothing overflows horizontally, the theme toggle
-round-trips and survives a reload, and there are no console errors.
+
+- Screens render; the tab bar switches and resets scroll
+- The last row and the Portfolio footnote clear the tab bar
+- Nothing overflows horizontally; the subtitle holds one line down to 320px
+- Every row is at least 44px tall and each select control has a 44x44 hit area
+- Selecting, deselecting, and persistence across reload and tab switches
+- Tapping the row body does not change selection
+- The theme toggle round-trips and survives a reload
+- No console errors, and `npm run build` passes strict typecheck

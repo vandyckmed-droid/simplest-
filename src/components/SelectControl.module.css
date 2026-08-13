@@ -1,0 +1,49 @@
+/*
+ * A 26px disc inside a 44px hit area — small enough that selection stays
+ * quieter than the ranking, large enough to hit reliably with a thumb.
+ */
+.control {
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  /* Pull the oversized hit area back to the gutter edge. */
+  margin-right: -0.5rem;
+  display: grid;
+  place-items: center;
+}
+
+.disc {
+  width: 1.625rem;
+  height: 1.625rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--separator-strong);
+  color: var(--ink-tertiary);
+  transition: background-color 0.12s ease, border-color 0.12s ease,
+    color 0.12s ease, transform 0.12s ease;
+}
+
+/*
+ * Selected changes hue, not weight: the same disc, drawn in the accent.
+ * A filled green puck reads louder than the ranking it sits beside.
+ */
+.control[aria-pressed='true'] .disc {
+  background: var(--accent-wash);
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
+}
+
+.control:active .disc {
+  transform: scale(0.9);
+}
+
+@media (hover: hover) {
+  .control:hover .disc {
+    border-color: var(--ink-tertiary);
+  }
+
+  .control[aria-pressed='true']:hover .disc {
+    border-color: var(--accent-ink);
+  }
+}

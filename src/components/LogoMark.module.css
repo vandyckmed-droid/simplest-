@@ -1,0 +1,14 @@
+.mark {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--logo-surface);
+  color: var(--logo-ink);
+  font-size: var(--text-sub);
+  font-weight: 600;
+  letter-spacing: 0;
+  user-select: none;
+}

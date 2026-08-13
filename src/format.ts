@@ -19,6 +19,11 @@ const weightPercent = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 1,
 });
 
+const wholePercent = new Intl.NumberFormat('en-US', {
+  style: 'percent',
+  maximumFractionDigits: 0,
+});
+
 export function formatMoney(value: number): string {
   return currency.format(value);
 }
@@ -38,6 +43,17 @@ export function formatSignedMoney(value: number): string {
 /** Unsigned weight, e.g. "18.4%". */
 export function formatWeight(fraction: number): string {
   return weightPercent.format(fraction);
+}
+
+/** Momentum blend score, e.g. "96.4". */
+export function formatScore(score: number): string {
+  return score.toFixed(1);
+}
+
+/** Signed percent at whole-number precision, e.g. "+184%". */
+export function formatSignedPercentWhole(fraction: number): string {
+  const sign = fraction > 0 ? '+' : fraction < 0 ? '−' : '';
+  return `${sign}${wholePercent.format(Math.abs(fraction))}`;
 }
 
 export type Direction = 'up' | 'down' | 'flat';

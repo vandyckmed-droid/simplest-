@@ -51,6 +51,7 @@ Report in this format:
 Completed Checkpoints
 * ✓ Phase 0 — Empty Repository
 * ✓ Phase 1 — App Shell
+* ✓ Phase 2 — Ranks
 
 Current Build
 * Phase N complete
@@ -65,6 +66,7 @@ Test
 
 - ✓ **Phase 0** — Empty repository
 - ✓ **Phase 1** — App shell
+- ✓ **Phase 2** — Ranks
 
 ## Commands
 

@@ -1,14 +1,14 @@
-/** Shared shapes. Phase 1 fills these from static fixtures only. */
+/** Shared shapes. Phase 2 still fills these from static fixtures only. */
 
 export interface Stock {
   /** Position in the ranked list. */
   rank: number;
   symbol: string;
   name: string;
-  /** Last price, in dollars. */
-  price: number;
-  /** Day change, as a fraction (0.0182 = +1.82%). */
-  dayChange: number;
+  /** Composite momentum score, 0–100. The list is ordered by this. */
+  momentum: number;
+  /** Trailing 12-month return, as a fraction (0.482 = +48.2%). */
+  return12m: number;
 }
 
 export interface Holding {
