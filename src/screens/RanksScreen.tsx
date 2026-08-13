@@ -2,8 +2,8 @@ import { List, Screen } from '../components/Screen';
 import { LogoMark } from '../components/LogoMark';
 import { Row } from '../components/Row';
 import { SelectControl } from '../components/SelectControl';
-import { RANKS, RANKS_SUBTITLE } from '../data/fixtures';
-import { directionOf, formatScore, formatSignedPercentWhole } from '../format';
+import { RANKS, RANKS_SUBTITLE } from '../data/market';
+import { directionOf, formatMoney, formatSignedPercent } from '../format';
 import { toggleSelection, useSelectedSymbols } from '../selectionStore';
 import type { Scheme } from '../useTheme';
 
@@ -28,11 +28,11 @@ export function RanksScreen({ scheme, onToggleScheme, onOpen }: RanksScreenProps
           <Row
             key={stock.symbol}
             lead={String(stock.rank)}
-            media={<LogoMark symbol={stock.symbol} />}
+            media={<LogoMark symbol={stock.symbol} name={stock.name} />}
             primary={stock.symbol}
-            value={formatScore(stock.momentum)}
-            meta={formatSignedPercentWhole(stock.return121)}
-            metaDirection={directionOf(stock.return121)}
+            value={formatMoney(stock.price)}
+            meta={formatSignedPercent(stock.dayChange)}
+            metaDirection={directionOf(stock.dayChange)}
             trailing={
               <SelectControl
                 selected={selected.includes(stock.symbol)}

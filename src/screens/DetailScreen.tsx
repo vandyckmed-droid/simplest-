@@ -2,16 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { PriceGraph } from '../components/PriceGraph';
 import { SelectControl } from '../components/SelectControl';
 import { WindowPicker } from '../components/WindowPicker';
-import { RANKS } from '../data/fixtures';
-import { DEFAULT_WINDOW, seriesFor } from '../data/series';
 import {
-  directionOf,
-  formatMoney,
-  formatScore,
-  formatSignedPercent,
-  formatSignedPercentWhole,
-  formatWeight,
-} from '../format';
+  DEFAULT_WINDOW,
+  RANKS,
+  formatAsOf,
+  formatAsOfLong,
+  rangeFor,
+  seriesFor,
+} from '../data/market';
+import { directionOf, formatMoney, formatSignedPercent } from '../format';
 import { toggleSelection, useSelectedSymbols } from '../selectionStore';
 import type { WindowId } from '../types';
 import { useSwipe } from '../useSwipe';
@@ -24,6 +23,13 @@ interface DetailScreenProps {
 }
 
 type Direction = 'next' | 'prev' | 'none';
+
+/**
+ * Momentum and volatility are calculated in a later phase. The rows stay so
+ * the screen keeps its shape, but they show nothing rather than a number the
+ * app has not worked out yet.
+ */
+const PENDING_STATS = ['Momentum Blend', '12–1 Return', 'Volatility'];
 
 export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps) {
   // The window is chosen once per visit and kept while swiping between
@@ -66,6 +72,7 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
   if (!stock) return null;
 
   const points = seriesFor(stock, window_);
+  const range = rangeFor(stock, window_);
   const changeDirection = directionOf(stock.dayChange);
 
   return (
@@ -110,45 +117,35 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
             <div className={`${styles.price} tnum`}>{formatMoney(stock.price)}</div>
             <p className={styles.change} data-direction={changeDirection}>
               <span className="tnum">{formatSignedPercent(stock.dayChange)}</span>{' '}
-              <span className={styles.period}>Today</span>
+              <span className={styles.period}>{formatAsOf(stock.asOf)} close</span>
             </p>
           </header>
 
           <div className={styles.graphSlot}>
             <PriceGraph
               points={points}
-              label={`${stock.symbol} price over ${window_}`}
+              label={`${stock.symbol} adjusted close, ${formatAsOfLong(range.from)} to ${formatAsOfLong(range.to)}`}
             />
           </div>
 
           <WindowPicker active={window_} onSelect={setWindow} />
 
           <ul className={styles.stats}>
-            <li>
-              <div className={styles.stat}>
-                <span className={styles.statLabel}>Momentum Blend</span>
-                <span className={`${styles.statValue} tnum`}>
-                  {formatScore(stock.momentum)}
-                </span>
-              </div>
-            </li>
-            <li>
-              <div className={styles.stat}>
-                <span className={styles.statLabel}>12–1 Return</span>
-                <span className={`${styles.statValue} tnum`}>
-                  {formatSignedPercentWhole(stock.return121)}
-                </span>
-              </div>
-            </li>
-            <li>
-              <div className={styles.stat}>
-                <span className={styles.statLabel}>Volatility</span>
-                <span className={`${styles.statValue} tnum`}>
-                  {formatWeight(stock.volatility)}
-                </span>
-              </div>
-            </li>
+            {PENDING_STATS.map((label) => (
+              <li key={label}>
+                <div className={styles.stat}>
+                  <span className={styles.statLabel}>{label}</span>
+                  <span className={styles.statValue} aria-label="Not yet calculated">
+                    —
+                  </span>
+                </div>
+              </li>
+            ))}
           </ul>
+          <p className={styles.footnote}>
+            Prices are adjusted closes. Momentum and volatility arrive with the
+            calculation phase.
+          </p>
         </article>
       </div>
     </section>

@@ -1,4 +1,4 @@
-import { RANKS } from './data/fixtures';
+import { RANKS } from './data/market';
 import type { WeightedHolding } from './types';
 
 /**

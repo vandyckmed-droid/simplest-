@@ -1,20 +1,24 @@
-/** Shared shapes. Phase 3 still fills these from static fixtures only. */
+/** Shared shapes. Market values come from `src/data/market.json`. */
+
+/** An adjusted daily close series, oldest first. */
+export interface History {
+  dates: string[];
+  closes: number[];
+}
 
 export interface Stock {
-  /** Position in the ranked list. */
+  /** Position in the list. Ranked by market cap until momentum exists. */
   rank: number;
   symbol: string;
   name: string;
-  /** Last price, in dollars. */
+  /** Latest adjusted close, in dollars. */
   price: number;
-  /** Day change, as a fraction (0.0284 = +2.84%). */
+  /** Change from the previous adjusted close, as a fraction. */
   dayChange: number;
-  /** Composite momentum score, 0–100. The list is ordered by this. */
-  momentum: number;
-  /** 12-month return excluding the most recent month, as a fraction. */
-  return121: number;
-  /** Annualised volatility, as a fraction (0.412 = 41.2%). */
-  volatility: number;
+  marketCap: number;
+  /** Date of the latest close, e.g. "2026-08-12". */
+  asOf: string;
+  history: History;
 }
 
 /** A selected stock and the weight the system gave it. Never authored. */

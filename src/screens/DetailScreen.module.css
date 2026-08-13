@@ -163,3 +163,11 @@
   letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
 }
+
+.footnote {
+  margin: 0;
+  padding: var(--space-5) var(--gutter) 0;
+  max-width: 24rem;
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+}

@@ -69,11 +69,13 @@ Test
 - ✓ **Phase 2** — Ranks
 - ✓ **Phase 3** — Ticker detail
 - ✓ **Phase 4** — Basic portfolio
+- ✓ **Phase 5** — Real market data
 
 ## Commands
 
 ```sh
 npm install
+npm run data     # rebuild src/data/market.json from the API (needs API_KEY)
 npm run dev      # http://localhost:5173
 npm run build    # strict typecheck + production build
 npm run preview  # serve the production build

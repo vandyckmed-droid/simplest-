@@ -11,4 +11,8 @@
   font-weight: 600;
   letter-spacing: 0;
   user-select: none;
+  /* Marks arrive at different aspect ratios; never crop or stretch one. */
+  object-fit: contain;
+  /* Most marks are drawn for a white ground, so give them one in both themes. */
+  padding: 0.1875rem;
 }

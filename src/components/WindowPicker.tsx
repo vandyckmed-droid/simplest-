@@ -1,4 +1,4 @@
-import { WINDOWS } from '../data/series';
+import { WINDOWS } from '../data/market';
 import type { WindowId } from '../types';
 import styles from './WindowPicker.module.css';
 

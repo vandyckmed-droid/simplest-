@@ -5,6 +5,7 @@
   "type": "module",
   "description": "iPhone-first stock app. You choose the stocks; the system calculates everything else.",
   "scripts": {
+    "data": "node tools/build-market-data.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
