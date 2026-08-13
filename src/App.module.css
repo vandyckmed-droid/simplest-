@@ -1,0 +1,22 @@
+/*
+ * A fixed iPhone-sized frame with a single scrolling panel inside it.
+ * Scrolling the panel rather than the document keeps the translucent tab
+ * bar compositing cleanly over the content.
+ */
+.app {
+  position: relative;
+  height: 100%;
+  height: 100dvh;
+  /* An iPhone-width column, centred on anything wider. */
+  max-width: 30rem;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.panel {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}

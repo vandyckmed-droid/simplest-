@@ -1,0 +1,37 @@
+.summary {
+  padding: var(--space-2) var(--gutter) var(--space-2);
+}
+
+.value {
+  font-size: var(--text-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.change {
+  margin-top: var(--space-2);
+  font-size: var(--text-sub);
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
+
+.change[data-direction='up'] .delta {
+  color: var(--accent-ink);
+}
+
+.change[data-direction='down'] .delta {
+  color: var(--negative);
+}
+
+.period {
+  color: var(--ink-secondary);
+  font-weight: 400;
+}
+
+.footnote {
+  margin: 0;
+  padding: var(--space-5) var(--gutter) 0;
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+}

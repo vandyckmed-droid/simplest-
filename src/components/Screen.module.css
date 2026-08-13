@@ -1,0 +1,68 @@
+.screen {
+  min-height: 100%;
+  padding-top: env(safe-area-inset-top);
+  /* Clear the fixed tab bar plus the home indicator. */
+  padding-bottom: calc(
+    var(--tab-bar-height) + env(safe-area-inset-bottom) + var(--space-8)
+  );
+}
+
+.header {
+  padding: var(--space-6) var(--gutter) var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.headerText {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+}
+
+.subtitle {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-sub);
+  letter-spacing: -0.01em;
+}
+
+.themeButton {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-top: 0.125rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--ink-secondary);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.themeButton:active {
+  background: var(--surface-pressed);
+  color: var(--ink);
+}
+
+.sectionLabel {
+  margin: 0;
+  padding: var(--space-6) var(--gutter) var(--space-3);
+  color: var(--ink-tertiary);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
