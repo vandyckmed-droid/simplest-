@@ -1,0 +1,179 @@
+/* Covers the whole frame, tab bar included — a push, not a tab. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  animation: push-in 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes push-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+.bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: calc(env(safe-area-inset-top) + var(--space-2)) var(--gutter) 0;
+}
+
+.back {
+  width: 2.75rem;
+  height: 2.75rem;
+  /* Pull the oversized hit area back to the gutter edge. */
+  margin-left: -0.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--ink);
+}
+
+.back:active {
+  opacity: 0.5;
+}
+
+/*
+ * The pager. The viewport clips; the track carries the previous, current and
+ * next pages side by side and is dragged with the finger. `pan-y` hands
+ * vertical scrolling back to the browser, so up and down never turns a page.
+ */
+.viewport {
+  flex: 1 1 auto;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.track {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+
+/* Only while settling — during the drag the track must track the finger. */
+.settling {
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.pane {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--space-8));
+}
+
+.identity {
+  padding: var(--space-2) var(--gutter) 0;
+}
+
+.ticker {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+}
+
+.company {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-sub);
+  letter-spacing: -0.01em;
+}
+
+.price {
+  margin-top: var(--space-5);
+  font-size: var(--text-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.change {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sub);
+  font-weight: 500;
+}
+
+.change[data-direction='up'] {
+  color: var(--accent-ink);
+}
+
+.change[data-direction='down'] {
+  color: var(--negative);
+}
+
+.period {
+  color: var(--ink-secondary);
+  font-weight: 400;
+}
+
+.graphSlot {
+  margin-top: var(--space-6);
+}
+
+.stats {
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: 0 var(--gutter);
+  padding: var(--space-4) 0;
+  border-bottom: var(--hairline) solid var(--separator);
+}
+
+.stats li:last-child .stat {
+  border-bottom: 0;
+}
+
+.statLabel {
+  color: var(--ink-secondary);
+  font-size: var(--text-sub);
+}
+
+.statValue {
+  font-size: var(--text-body);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Position in the ranked list — also a hint that swiping moves through it. */
+.position {
+  color: var(--ink-tertiary);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.footnote {
+  margin: 0;
+  padding: var(--space-5) var(--gutter) 0;
+  max-width: 24rem;
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+}
+
+/* The blend is what the list is ranked by, so it carries more weight. */
+.stat[data-lead] .statLabel {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.stat[data-lead] .statValue {
+  font-size: var(--text-title);
+  letter-spacing: -0.02em;
+}

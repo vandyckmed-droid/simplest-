@@ -1,0 +1,109 @@
+/*
+ * Design tokens — the single source of truth for the visual language.
+ *
+ * Light is defined on bare :root. Dark is applied two ways so both the
+ * system preference and the in-app toggle work in both directions:
+ *   - @media (prefers-color-scheme: dark) guarded by :not([data-theme='light'])
+ *   - [data-theme='dark'] for an explicit choice
+ *
+ * Never give a colour its only definition inside a media or [data-theme] block.
+ */
+
+:root {
+  /* Surfaces */
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-bar: rgba(255, 255, 255, 0.82);
+  --surface-pressed: rgba(0, 0, 0, 0.04);
+  /*
+   * Company marks sit on a light plate in BOTH themes: they are drawn with
+   * transparent grounds and dark artwork, and would vanish on black.
+   */
+  --logo-surface: #f0f1f2;
+  --logo-ink: #6d7278;
+
+  /* Ink */
+  --ink: #000000;
+  --ink-secondary: #6d7278;
+  --ink-tertiary: #a2a7ad;
+
+  /* Lines */
+  --separator: rgba(0, 0, 0, 0.08);
+  --separator-strong: rgba(0, 0, 0, 0.14);
+
+  /* Accents — used sparingly, and only to carry meaning */
+  --accent: #00c805;
+  --accent-ink: #00a604;
+  --accent-wash: rgba(0, 200, 5, 0.1);
+  --negative: #ff5000;
+
+  /* Type scale */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
+  --text-display: 2.5rem; /* 40px — portfolio value */
+  --text-title: 2.125rem; /* 34px — screen titles */
+  --text-body: 1.0625rem; /* 17px — primary rows */
+  --text-sub: 0.9375rem; /* 15px — secondary rows */
+  --text-caption: 0.8125rem; /* 13px — captions */
+  --text-micro: 0.6875rem; /* 11px — tab labels, overlines */
+
+  /* Spacing — a 4px rhythm, kept generous */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
+  /* Layout */
+  --gutter: 1.25rem; /* screen side padding */
+  --tab-bar-height: 3.25rem;
+  --radius: 0.75rem;
+  --hairline: 0.5px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --surface: #000000;
+    --surface-raised: #0f1113;
+    --surface-bar: rgba(0, 0, 0, 0.78);
+    --surface-pressed: rgba(255, 255, 255, 0.06);
+    --logo-surface: #eceef0;
+    --logo-ink: #4a5057;
+
+    --ink: #ffffff;
+    --ink-secondary: #9299a1;
+    --ink-tertiary: #62686f;
+
+    --separator: rgba(255, 255, 255, 0.1);
+    --separator-strong: rgba(255, 255, 255, 0.18);
+
+    --accent: #00e310;
+    --accent-ink: #00e310;
+    --accent-wash: rgba(0, 227, 16, 0.14);
+    --negative: #ff6a33;
+  }
+}
+
+:root[data-theme='dark'] {
+  --surface: #000000;
+  --surface-raised: #0f1113;
+  --surface-bar: rgba(0, 0, 0, 0.78);
+  --surface-pressed: rgba(255, 255, 255, 0.06);
+  --logo-surface: #eceef0;
+  --logo-ink: #4a5057;
+
+  --ink: #ffffff;
+  --ink-secondary: #9299a1;
+  --ink-tertiary: #62686f;
+
+  --separator: rgba(255, 255, 255, 0.1);
+  --separator-strong: rgba(255, 255, 255, 0.18);
+
+  --accent: #00e310;
+  --accent-ink: #00e310;
+  --accent-wash: rgba(0, 227, 16, 0.14);
+  --negative: #ff6a33;
+}

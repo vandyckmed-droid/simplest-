@@ -1,2 +1,9 @@
 node_modules/
+dist/
 .env
+.env.local
+.DS_Store
+*.log
+
+# Raw provider responses, cached between builds. Never committed.
+data-cache/

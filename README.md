@@ -1,484 +1,378 @@
-# Ranks
+# Stock App
 
-Every tradeable US stock — 1,500 after cleaning — plus 89 thematic ETFs, in one
-list, ranked on volatility-adjusted 12-1 and 6-1 momentum. Tap to build a
-basket; it sizes itself equally or by inverse volatility, in percent or in
-cash, and flags names that duplicate something already in it. Output is
-self-contained HTML — no network requests — in two pages: `dist/ranks.html`, the
-phone-shaped list over both universes (803 KB), and `dist/etfs.html`, a
-desktop board for the 89 funds on their own (94 KB).
+You choose the stocks. The system calculates everything else.
 
-```
-npm run build        # refresh prices, rescore, regenerate both pages
-npm run data         # stocks only    -> data/ranks.json
-npm run etfs         # funds only     -> data/etfs.json
-npm run render       # inline + write -> dist/ranks.html
-npm run board        # inline + write -> dist/etfs.html
-npm run etf:check    # is every fund in the list still trading?
-```
+The only actions the product ever offers are **look, sort, filter, inspect,
+select, deselect**. Portfolio weights are never entered by hand — they are
+derived. Every phase is built against that rule.
 
-`API_KEY` must hold a Financial Modeling Prep key. Everything targets FMP's
-`/stable` endpoints; the v3 endpoints are retired for keys issued after
-2025-08-31.
+## Status — Phase 11: A hundred names
 
-## The signal
+| Built | Not built yet |
+| --- | --- |
+| iPhone-first layout with safe-area handling | A universe beyond 100 names |
+| Ranks, ordered by Momentum Blend | Covariance, correlation, clustering, HRP |
+| Select / deselect, persisted on the device | Weighting beyond equal |
+| Ticker detail: price, real graph, 1M–2Y windows | User-facing sort and filter controls |
+| 12–1 and 6–1 return, risk-adjusted momentum, and rank | Intraday prices |
+| Momentum Blend, the primary ranking value | |
+| Swipe left/right through the ranked list | |
+| Portfolio: your selections, equal-weighted to 100% | |
+| Real adjusted end-of-day prices, names, and logos | |
+| The 100 most liquid US-listed companies | |
+| ADRs, competing on the same liquidity rule | |
+| Light and dark mode | |
 
-A window has two edges, and both are settings on the page:
+## The momentum signals
 
-| Edge | Setting | Values |
-|---|---|---|
-| where it **opens** | Window | 252 trading days back (12 mo), 126 (6 mo), or the blend of both |
-| where it **closes** | Skip | 0, 10 or 21 trading days short of today — 0%, 50%, 100% of a month |
+`src/momentum.ts` holds the maths as pure functions over an ascending series
+of adjusted closes. Trading day −k is `closes[length - 1 - k]`. Both windows
+end at day −21, skipping the most recent month so the last few weeks'
+reversal does not contaminate the measurement:
 
-The conventional definition is the 100% skip: that is the "-1" in 12-1 and 6-1,
-and it is standard in momentum work because the last few weeks of a stock's
-return tend to mean-revert, so including them mixes a reversal signal into a
-momentum one.
+| Window | Span |
+| --- | --- |
+| 12–1 | day −252 → day −21 |
+| 6–1 | day −126 → day −21 |
 
-It is also worth being able to switch off, which is why it is a toggle rather
-than a constant. A name can rank badly on a window that closed a month ago and
-have turned since — GDX sits 81st of 89 funds on the conventional definition
-while being up 23% over the skipped month. That is a fact about the measurement,
-not about the fund, and the page should not hide it.
+Both go through the same `momentumWindow` function, so they cannot drift
+apart in how they measure.
 
-Every name is measured at all six combinations. Each produces:
+| Figure | How |
+| --- | --- |
+| Return | `P(−21) / P(−lookback) − 1` |
+| Volatility | sample standard deviation of daily log returns in that window, × √252 |
+| Risk-Adjusted Momentum | return ÷ volatility |
+| Rank | `100 × (names with a lower risk-adjusted value) / (count − 1)` |
+| **Momentum Blend** | `0.5 × 12–1 rank + 0.5 × 6–1 rank` |
 
-```
-logReturn  = ln(P_end / P_start)
-annReturn  = logReturn / (window length in years)
-annVol     = stdev(daily log returns inside the window) * sqrt(252)
-score      = annReturn / annVol
-```
+The blend is the primary ranking value: it orders the Ranks screen and sets
+each row's rank number. A stock missing either window has no blend rather
+than a half-informed one, and sorts to the bottom; ties fall back to the
+symbol so the order is stable.
 
-Numerator and denominator describe the identical stretch of tape, so the score
-is a Sharpe-like, unitless number — comparable across horizons despite their
-different lengths, and across names with very different volatility. The
-**blend** is the plain average of the 12-month and 6-month scores at whichever
-skip is selected.
+Ties share the lower percentile, so the weakest name sits at 0 and the
+strongest at 100. It is shown out of 100 — "89 / 100" — rather than as an
+ordinal, which would read like a position in the list rather than a score. A price line that never moves has no risk to divide by, so
+its ratio is null rather than astronomical — floating-point noise leaves
+around 1e-16 of "volatility" on a flat series, which is why the guard is a
+small epsilon and not a test against zero.
 
-Only `annReturn` and `annVol` ship, six of each. Score is a division and blend
-is a mean, so a third array would be arithmetic the page can do itself. Moving
-either edge re-ranks the list positionally — the stored rank is the conventional
-definition, and the displayed one is always the position in the list you are
-looking at.
+Everything is derived once from the stored closes, so the same dataset always
+gives the same numbers — no rank is stored in `market.json`, because ranking
+is a calculation rather than data. `npm test` checks each step against
+examples worked out by hand, and re-derives every stock's returns straight
+from the raw prices.
 
 ## The universe
 
-`src/universe.js` turns FMP's screener output into things you could actually
-place an order for. FMP's `country=US` filter is about domicile rather than
-listing venue, so it returns London and Toronto lines for US companies
-(`0YXG.L` is Broadcom); it also keeps preferred shares, baby bonds and SPAC
-units, and lists every share class separately. The cleaner:
+A hundred names, chosen by a rule rather than by hand, so the list can be
+rebuilt from scratch and come back the same. `tools/universe.mjs` owns it:
 
-1. keeps NYSE / Nasdaq / AMEX only,
-2. drops `-P*`, `-U*`, `-W*`, `-R*` suffixed lines (preferreds, units,
-   warrants, rights) while keeping real share classes like `BRK-B`,
-3. collapses each company to its most liquid line — this is what removes
-   `GOOG` in favour of `GOOGL`, `BRK-A` in favour of `BRK-B`, and preferreds
-   that share a parent's name without carrying a preferred suffix
-   (`STRK` vs `MSTR`),
-4. requires price ≥ $5 and ≥ $25M median daily dollar volume over 63 sessions,
-   plus a full 12-1 window of history.
+1. Ask the provider's screener for actively traded stocks on NYSE, Nasdaq or
+   NYSE American, above $2bn of market cap and $5 a share, from any country.
+   ETFs and funds are excluded by the screener.
+2. Drop anything whose symbol is not a plain ticker or one of the A/B classes
+   that are still common stock. Preferreds (`BAC-PB`), warrants, rights and
+   units all carry a suffix the pattern will not match.
+3. Take the 300 most active of those as a pool — this only bounds how much
+   history is downloaded. It has to be comfortably wider than the universe,
+   since the pool is ordered on a single day's dollar volume while the
+   selection is made on a quarter's median.
+4. Settle each candidate's **security type** from its profile, and keep only
+   domestic common stock and ADRs. The rules are below.
+5. Measure each survivor properly from our own adjusted bars: the **median
+   daily dollar volume over the last 63 sessions**. A median rather than a
+   mean, so one frantic day cannot buy a name its way in.
+6. Drop anything without the 253 sessions the 12–1 signal needs.
+7. Keep one listing per company — the most liquid one.
+8. Keep the top 100. Ties break on symbol, so the same data always gives the
+   same list in the same order.
 
-4,532 raw rows in, **1,500** out.
+At the last build 262 companies survived eligibility and the cut fell at
+$987m a day — five of the hundred are ADRs. Two names are younger than the 2Y
+graph (SanDisk, 375 sessions; CoreWeave, 345); both clear the 12–1 window
+comfortably, and their longest graph span simply starts at their first
+session.
 
-Run the build after the close. The candidate gate uses the screener's
-single-session volume, so a mid-session run sees partial-day figures and drops
-borderline names before their history is ever fetched: the build behind this
-snapshot ran during the session and lost 161 more names at that gate than the
-previous one, taking the universe from 1,517 to 1,500. NEO left XHS's holdings
-mapping that way, at $27M median dollar volume against a $25M floor.
+### What counts as eligible
 
-## Names
+| Security | Eligible where |
+| --- | --- |
+| US common stock | NYSE, Nasdaq, NYSE American |
+| ADR | NYSE, Nasdaq |
+| Everything else | nowhere |
 
-FMP's company names carry share-class and legal-form boilerplate that eats the
-one line of width a phone gives them, so it is stripped and a couple of dozen
-long words are abbreviated. Two cases need care: stripping "Company" off "Wells
-Fargo & Company" leaves a dangling ampersand, and 65 names tidy down to their
-own ticker — Roku Inc. to "Roku", CSX Corporation to "CSX" — where a grey line
-repeating the ticker above it reads as a bug. Backing the `Holdings`/`Group`
-strip off rescues the ones with a real word in them (`PACS Group`, `HCI Group`);
-the remaining 55 lose the line and show ticker alone.
+An ADR is admitted on the provider's own `isAdr` flag rather than on being
+foreign, because those are not the same question. A foreign company whose
+ordinary shares list directly — Shopify, Linde, Accenture, MercadoLibre — is
+neither a domestic common stock nor a depositary receipt, so it stays out;
+the security type this phase admitted is the ADR, and nothing wider. OTC
+never arises: the screener is asked for three exchanges and nothing else, so
+an over-the-counter receipt is never a candidate, and NYSE American is
+allowed for domestic common stock but not for ADRs.
 
-## The flag
+ADRs are otherwise indistinguishable. They clear the same liquidity median
+and the same history floor, they are scored by the same functions against the
+same cross-section, and no row, figure or weight is adjusted because a holding
+is a receipt. The build reports which of the fifty are ADRs, and every
+exclusion it made, so the rule can be read off the output rather than trusted.
 
-A row carries a red dot when it correlates **0.60 or higher with any single name
-already in the basket**. The dot's label names the twin and the figure —
-*"correlates 0.73 with XOM, which you hold"*. Held names never carry one; there
-is nothing to warn about.
+### One listing per company
 
-0.60 is well into the tail of the daily distribution. A random pair in this
-universe runs about **0.12**, the 90th percentile 0.32. Genuinely related names
-sit far above it:
+Two lines into the same business would be two positions in a portfolio that
+thinks it holds two things. Listings are grouped by the registrant's **CIK**,
+which share classes have in common — Alphabet's A and C shares answer to one
+key — and the most liquid of each group is kept. Where the provider has no
+CIK, the company name with its legal form stripped decides instead; that is
+the weaker test, so every merge it makes is named in the build notes. This is
+what keeps `GOOG` out while `GOOGL` stays in.
 
-| | daily | weekly | monthly |
-|---|---|---|---|
-| HD / LOW | 0.88 | 0.86 | 0.79 |
-| XOM / CVX | 0.84 | 0.90 | 0.77 |
-| JPM / BAC | 0.75 | 0.80 | 0.87 |
-| KO / PEP | 0.57 | 0.41 | 0.48 |
+## Market data
 
-So the mark fires on duplicates rather than on family resemblance, and it is not
-an artefact of daily sampling — the same pairs read much the same weekly and
-monthly. Holding XOM lights 21 of the 84 energy names; holding a diversified
-eight-name basket lights about 27 of 1,500.
+`src/data/market.json` is generated by `npm run data` and committed. It holds,
+for each of the hundred, the company name, exchange, domicile, whether it is
+an ADR, the latest adjusted close, the day change, market cap, median dollar
+volume, and 540 sessions of adjusted daily closes.
 
-`CORR_FLAG` in the template is the one number to change if you want it louder or
-quieter.
+Every series ends on the same session. The provider can be a day ahead on
+some symbols — a partly-filled current day, or simply a series fetched later
+than the rest — and a cross-sectional rank only means something if every name
+is measured to the same date, so bars past the date most of the field last
+traded are trimmed off and the trim is reported.
 
-## Marks
+```sh
+npm run data              # refresh from the API (needs API_KEY)
+npm run data -- --refresh # ignore the cache and re-download
+```
 
-Every row carries a 12px line-drawing of its sector, keyed by sector *name* so
-a rebuild that reorders the sector list cannot shuffle them. Each picks the
-most literal object in that sector's world — a chip, a broadcast dot, a
-cross, a bank, a droplet, a shopping bag, a shield, a factory, a cube, a
-house, a bolt — so they read without a legend.
+**Credentials.** `API_KEY` is read from the environment by `tools/` at build
+time only. It never reaches the browser, the bundle, the dataset, or the
+repository — the app ships a static JSON file and makes no network request of
+its own at runtime.
 
-Two of them were redrawn after proofing at actual size: the chip started with
-eight pins that turned to mush at 12px and now has four, and Industrials was
-an eight-tooth gear that read as a *sun* and is now a factory silhouette.
-Anything meant to be legible at 12px has to be checked at 12px.
+**Caching.** Raw provider responses are written to `data-cache/` (gitignored)
+and reused for 12 hours, so re-running the build does not re-download history
+that has not changed. Logos are cached for 30 days. `--refresh` bypasses both.
 
-## Window and Skip
+**Determinism.** Bars are validated, de-duplicated, sorted oldest-first, and
+rounded to four decimals before being written, so the same inputs always
+produce the same file and later phases can calculate against something stable.
 
-Two settings, one per edge. **Window** switches score, return **and** volatility
-together — the alternative leaves two of the three columns describing a
-different stretch than the one you selected — and names the score column, so it
-stays visible from the list. **Skip** tags itself beside the count whenever it is
-not the conventional 100%, the same way an active market-cap cutoff does.
+**Failure handling.** Requests retry four times with backoff, and rate limits
+are retried rather than thrown. A symbol that cannot be built is skipped with
+a reported reason instead of failing the whole dataset, and the build reports
+every data-quality problem it found.
 
-Neither is redundant. Only **12 of the top 25** names are shared between Blend
-and 12 mo (28 of 50, 57 of 100), and the two lookbacks rank-correlate 0.673.
+The build used to cross-check each day change against the provider's live
+quote. That check is gone, because it could not be made to mean anything: the
+quote describes whichever session is trading now, while this dataset ends at
+the last session the whole field completed, so it fired on perfectly good
+data — at a hundred names, on a third of the universe. Gating on the quoted
+price matching our last close does not rescue it either, since a stock
+trading near yesterday's close passes while still being quoted a day later.
+What it was guarding against, a wrongly adjusted series, is not detectable
+this way: a missed split looks like a large single-day move, and this
+universe holds genuine ones up to +59%. The figures are checked where it
+works instead — `npm test` re-derives every stock's momentum from the stored
+closes, and the browser suite asserts each day change on screen against price
+÷ previous close.
 
-## Settings
+### Selection
 
-A third tab, holding everything that changes what the list shows or how the
-basket is built: **universe**, **weights**, **display**, **window**, **skip** and
-a **market cap** cutoff. None of it lives in the Ranks header — that keeps the
-list itself to a search box, a sector dropdown and the column headers.
+Tapping the disc on the right selects a stock; tapping it again deselects.
+The chosen symbols live in `localStorage` under `stock-app.selection` and
+survive a reload. Selection changes hue rather than weight — a filled green
+puck would read louder than the ranking it sits beside.
 
-"Top 500 largest" is stored as a *rank*, not a dollar line — an absolute
-threshold drifts as the market moves, a rank does not. The page ranks every
-name by market cap once at load and the filter is `capRank <= 500` (currently
-$16.7B and up).
+`selectionStore.ts` is a module-level store read through `useSyncExternalStore`,
+not per-component state, so Ranks, ticker detail, and Portfolio can never
+disagree about what is selected.
 
-Filters decide who is listed, never what anything scores: the momentum blend
-is computed against the whole universe and does not move. The rank column is
-positional, so it renumbers — under `Top 500` the list runs 1…500 with SNDK
-at #1 on the same +2.98 it carries unfiltered. An active filter is tagged
-beside the count in the header, so it is visible from the list rather than only
-from its own tab, and it persists in localStorage.
+### Portfolio
 
-## Weights
+Portfolio is not a screen you fill in — it is a view of the selection. It
+shows only selected stocks, in ranked order, with the weight the system gave
+each one. The header carries the two facts that matter: the total weight and
+the number of holdings.
 
-Two schemes, switched in Settings; the basket re-weights immediately.
+Phase 4 weights every holding equally. Weights are distributed in tenths of
+a percent by largest remainder, so what is on screen adds to exactly 100.0%
+instead of 99.9% — three holdings read 33.4 / 33.3 / 33.3 rather than three
+thirds that quietly lose a tenth. `weights.ts` owns this and nothing else
+writes a weight.
 
-| | |
-|---|---|
-| **Equal** | `1/n` |
-| **Inv vol** | `w ∝ 1/σ`, on the blended volatility the Vol column shows |
+There is no way to edit a weight, by design. The + / ✓ control appears on
+Portfolio rows too, so a holding can be dropped from here; because every
+screen reads the one selection store, removing a stock anywhere re-weights
+the rest immediately.
 
-Both size off numbers already on the screen, so either can be checked against
-the list with a pencil — which is the whole brief for this page.
+### Ticker detail
 
-Above the holdings sit the average score, the weighted volatility, the largest
-single weight, and one row of sector marks with counts. That row used to be one
-row *per* sector — eleven of them on a fourteen-name basket, which put the first
-holding below the fold. The marks are the ones already on every row, so the
-tally needs no legend, and each pair binds tight and separates wide: at an even
-spacing, Healthcare's cross beside its count reads as "+1" — one more — rather
-than one healthcare name.
+Tapping a row anywhere except the select control opens that stock. Detail is
+an overlay above the tab bar rather than a third tab, so Ranks stays mounted
+underneath and back returns to exactly the scroll position you left.
 
-## Display
+The graph is the screen: full-bleed, 232px tall, a single line with no axes,
+grid, or fill. It is green rising and red falling, and the window buttons are
+marked in ink rather than the accent so a second colour never fights it. The
+window defaults to 1Y and is kept while swiping between stocks, so spans
+compare like for like.
 
-Weights read as **percent** or as **cash** — the dollars each holding needs in a
-hypothetical $10,000 book, which is what the `$10K` column header names. Both
-are apportioned by largest remainder so the column sums to exactly 100% or
-exactly $10,000; rounding each row on its own lands near the total but not on
-it, and a column of weights is a thing readers add up.
+Swipe left or right to move through the ranked list, or use the arrow keys;
+Escape closes.
+
+Every stock has its own pane, side by side in a single track, and only the
+track's transform moves. That matters for more than tidiness: moving a node in
+the DOM restarts its CSS animations, so a pager that recycled a window of
+pages replayed the chart's draw on every swipe and flashed as the nodes were
+re-inserted. Nothing moves, so nothing restarts.
+
+The panes never move, but their contents wait: only the visible page and the
+one either side are filled in. Building all fifty at once cost 1.8s to open
+detail on a throttled phone; one page either side is enough that whatever you
+swipe to was already built before you arrived, so landing on it still never
+replays the draw. This is what let the universe double without the screen
+noticing: at a hundred names, opening detail still takes 660ms and three
+pages are built, not a hundred.
+
+Committing a page is one continuous transition — the target changes from "this
+page plus the drag" to "the next page", and CSS carries it the rest of the
+way. There is no snap back to the middle. A page turns if the drag passes a
+quarter of the width, or on a flick that is both fast and past an eighth of
+it; anything shorter springs back. Dragging past either end stretches instead
+of moving.
+
+The gesture locks to whichever axis it moves along first, and the viewport
+carries `touch-action: pan-y`, so vertical scrolling stays with the browser
+and never turns a page.
+
+The price line draws itself from left to right when a stock opens and again
+whenever the window changes, over 620ms. It is a clip that uncovers the line
+rather than a dash-offset draw: `non-scaling-stroke` measures dashes after the
+viewBox has been stretched, so a dash pattern repeats instead of running once.
+Swiping does not redraw: the pages are never rebuilt, so their animations
+never restart.
+
+## Run it
+
+```sh
+npm install
+npm run dev      # http://localhost:5173
+```
+
+Open it on a phone, or in a desktop browser's device toolbar at iPhone width.
+Both themes follow the system setting; the icon in the top right overrides it
+and the choice is remembered.
+
+```sh
+npm run build    # typecheck + production build
+npm run preview  # serve the production build
+```
+
+## Visual language
+
+Set once, in `src/styles/tokens.css`, and reused everywhere:
+
+- **Surfaces** — pure white and pure black, no gradients or cards.
+- **Type** — system font, 34px screen titles, 17px rows, tight tracking, and
+  tabular figures so every number column aligns.
+- **Space** — a 4px rhythm on a 20px gutter, kept generous.
+- **Lines** — hairline separators inset to the gutter. No boxes, no shadows.
+- **Accent** — one bright green, spent only on gains; one orange-red on losses.
+  Nothing else is coloured.
+
+To change the look, change the tokens. Components read them and never hardcode
+a colour or size.
 
 ## Layout
 
-```
-src/universe.js          screener output -> tradeable common stock
-src/momentum.js          the windowing, scoring and vector math, shared by both builds
-src/ranks-build.js       universe -> prices -> scores + return vectors -> data/ranks.json
-src/etf-universe.js      the thematic fund list, as ordered groups
-src/etf-holdings.js      hand-kept top holdings per fund, resolved at render time
-src/ranks-template.html  the combined page; __DATA__ is the injection point
-src/ranks-render.js      inlines the JSON, writes dist/ranks.html
-src/cluster.js           k-medoids over the fund correlation matrix, run at build time
-src/etfs-template.html   the ETF board; same injection point
-src/etfs-render.js       clusters, resolves holdings, writes dist/etfs.html
-```
-
-`dist/ranks.html` is fully self-contained — the data is embedded, there are no
-network requests, and it renders in light or dark according to the viewer's
-theme.
-
-It carries 252 daily log returns per name, quantised to int8 and base64'd, so
-any pair's correlation is available on demand — a dot product over 252 numbers,
-no matrix precomputed. That is 570 KB of the page, and the whole cost of the
-correlation flag.
-
-What the page does carry per name is six annualised returns and six
-volatilities — every skip against every lookback — because the reader moves both
-edges of the window at runtime and neither can be derived from the other.
-
-# ETF universe
-
-`src/etf-universe.js` holds a thematic ETF list — **16 themes, 93 unique funds,
-120 listings**. Settings › Universe switches the Ranks list between single
-stocks and these funds; `npm run ranks` builds both.
-
-It is stored as ordered groups rather than a flat ticker list because the
-grouping carries meaning: 24 funds sit under more than one theme (GRID is grid
-infrastructure, water infrastructure *and* electrification; COPX is a copper
-miner and a battery-materials play), and the lens you arrive through changes
-what the fund is to you. `ETF_UNIVERSE` derives one entry per ticker, keeping
-every theme it belongs to plus any alternate label.
-
-## How the two universes differ
-
-The maths is identical — a fund has adjusted closes like anything else, so
-`src/momentum.js` scores it unchanged and `src/etf-build.js` reuses it whole.
-Four things differ:
-
-- **No screener step.** The curated list *is* the universe, so `src/universe.js`
-  (which exists to throw funds away) is not involved.
-- **No liquidity floor.** Median daily dollar volume runs from under $0.1M
-  (NERD) to $6.5B (SMH); the stock side's $25M would delete 39 of the 89
-  scoreable funds, including most of the thematic ones the list exists for. The
-  list is kept whole instead.
-- **No market cap.** A fund has assets, not a capitalisation, so the Top 500
-  cutoff has nothing to rank and hides itself in ETF mode.
-- **Themes, not sectors.** The group dropdown reads "All themes" and carries the
-  16 groups. Ten map onto an existing sector mark; six needed drawing — a grid
-  for broad sectors, a sprout, waves, a rocket, linked nodes, and mountains.
-
-Names come from the theme list rather than the fund's legal name: SMH is
-"Semiconductors", not "VanEck Semiconductor ETF".
-
-Baskets are **per universe**, in separate localStorage keys — switching to funds
-does not mix ETFs into a stock basket or empty it.
-
-## Look-through
-
-Funds with a holdings list carry a chevron at the end of their name line.
-Tapping it opens the fund's top holdings resolved against the stock universe — each name's rank
-and score, following the metric switch, so what you read there is the number the
-stock list would show. The row itself still selects into the basket; only the
-chevron looks through. (That is why a row is a `div` with `role="button"` rather
-than a `<button>`: a button inside a button is not valid HTML, and the keyboard
-behaviour is restored by hand.)
-
-The view leads with the gap it exists to show:
+The app is a fixed iPhone-width frame with one scrolling panel inside it, so
+the translucent tab bar stays put and content passes cleanly underneath.
 
 ```
-XHS blend        +2.97
-Holdings blend   +1.08
-Holdings vol     64% vs 17%
-Listed weight    22.4% of fund
+src/
+  App.tsx              frame, active tab, scroll reset
+  useTheme.ts          system scheme, manual override, persistence
+  format.ts            money / percent / weight formatting
+  types.ts             Stock, Holding, TabId
+  selectionStore.ts    chosen symbols: one store, every screen
+  weights.ts           equal weighting, summing to exactly 100%
+  useCarousel.ts       the finger-tracking pager behind ticker detail
+  momentum.ts          the 12–1 and 6–1 signals, as pure functions
+  data/market.ts       the app's only view of market data
+  data/market.json     generated dataset (real adjusted closes)
+  assets/logos/        real company marks, bundled at build time
+  screens/
+    RanksScreen.tsx    the ranked list
+    DetailScreen.tsx   ticker detail overlay
+    PortfolioScreen.tsx
+  components/
+    Screen.tsx         title block, safe areas, section labels
+    Row.tsx            the one list row both screens use
+    LogoMark.tsx       logo placeholder
+    SelectControl.tsx  the + / check disc
+    PriceGraph.tsx     the price line
+    WindowPicker.tsx   1M / 3M / 6M / 1Y / 2Y
+    TabBar.tsx         bottom navigation
+    Icons.tsx          stroke icons
+  styles/
+    tokens.css         the design language
+    global.css         reset and base type
+
+tools/                 build-time only; never shipped to the browser
+  test-momentum.ts     hand-worked tests for the momentum maths
+  fmp.mjs              provider client, reads API_KEY from the environment
+  universe.mjs         the eligibility and liquidity rules that pick the fifty
+  test-universe.mjs    hand-worked tests for those rules
+  cache.mjs            on-disk cache of raw responses
+  build-market-data.mjs  fetch -> validate -> src/data/market.json
 ```
 
-**A fund's score is mostly its denominator.** XHS's top ten weight out to a 60%
-return against the fund's 52% — close. Their weighted *volatility* is 64%
-against the fund's 17%. Diversification collapses the volatility of a 70-name
-book to a quarter of its average constituent's, and since the score is a return
-divided by exactly that, the fund scores +2.97 where its holdings score +1.08.
-XHS is not top of the ETF list because it holds the strongest trends — it holds
-names ranked 13th and 1,254th side by side — but because the blend is smooth. A
-stock's +2.97 and a fund's +2.97 are the same number describing different
-things, which is worth knowing when the two universes are one tap apart.
+`Row` is deliberately shared: Ranks and Portfolio must keep an identical
+rhythm as later phases add to them.
 
-Names that miss the stock universe are kept and marked rather than dropped, and
-the mark says only what is known. Three misses are liquidity, with the figure
-shown rather than a guess: USPH at $14M a day, CON at $24.5M and AMLX at $24.7M
-against a $25M floor — two of them short by less than a rounding error, which is
-worth seeing rather than reading as "not tradeable". Six are something else
-entirely: CRAK's book is largely foreign lines (RIGD is a London GDR, 5020 is
-Tokyo, 096770 is Seoul) that were never candidates for a US-listed universe, and
-calling those thin would be wrong. A hole in the mapping is information about
-the fund's book too — refining is a global business and CRAK is built like one,
-so its top ten covers 57.7% of the fund but only 26.9% of it lands in a
-US-listed universe.
+## Stack
 
-Two limits are structural, and the page states both rather than implying a
-completeness it does not have. FMP's ETF-holdings endpoint answers 402
-*Restricted Endpoint* on this key, so `src/etf-holdings.js` is transcribed by
-hand and holds **top tens, not books** — XHS's ten rows are 22.4% of the fund
-and the other ~78% is unmapped, so every figure above is a sample of the largest
-positions. Coverage varies wildly with how concentrated the fund is: IHF's top
-ten is 71.2% of it (UNH alone is 20.9%) and REZ's is 69.7% (WELL alone is 24%),
-where XPH's is 25.5%. Six funds are mapped so far — XHS, IHF, CRAK, XPH, REZ,
-CIBR — and adding more is a matter of appending `[ticker, weight]` rows; the
-renderer warns if a listed symbol is not a scored fund.
+React 18, TypeScript (strict), Vite, CSS Modules. No UI framework, no state
+library, no runtime dependencies beyond React.
 
-The size of the gap is itself the interesting reading, and it varies more than
-the "funds score higher" rule suggests:
+## Verified
 
-| | fund ret | holdings | fund vol | holdings | fund blend | holdings |
-|---|---|---|---|---|---|---|
-| XHS | 52% | 60% | 17% | 63% | **+2.97** | +1.08 |
-| IHF | 48% | 57% | 20% | 34% | **+2.51** | +1.63 |
-| CIBR | 50% | 77% | 29% | 51% | **+1.66** | +1.63 |
-| REZ | 24% | 27% | 16% | 23% | **+1.43** | +1.19 |
+Checked in Chromium at iPhone 14 Pro and 320px widths, in light and dark:
 
-CIBR is the case where it nearly vanishes. Its volatility still collapses — 51%
-across the top ten down to 29% for the fund — but its return collapses with it,
-50% against the top ten's 77%, because those ten are only 58% of the book and
-the other 42% did far worse. The two effects cancel and the fund ends up scoring
-what its largest holdings score. REZ is the opposite reason for a small gap: ten
-REITs that already move together barely diversify, so there is little
-denominator to gain. And weights are current while momentum is historical: a name bought
-last month is credited with a year of returns the fund did not hold through.
-
-## Health of the list
-
-```
-npm run etf:check
-```
-
-Re-run before building on it. Thematic ETFs close and get renamed far more often
-than stocks do, and a dead fund still returns a *quote* — it is the history that
-stops moving, which is what the check actually looks at.
-
-As of 2026-08-12, 89 of 93 score cleanly. The four that do not are kept in the
-list as given rather than quietly swapped, and recorded in `ETF_ISSUES`:
-
-| Ticker | Problem |
-|---|---|
-| `VPN` | Quotes but no adjusted history. Global X renamed it "Data Center REITs & Digital Infrastructure"; ~25k shares/day. **`DTCR`** covers the same theme at ~674k shares/day. |
-| `PBS` | Quotes but no adjusted history. Invesco Dynamic Media, ~2k shares/day — effectively untradeable. |
-| `BJK` | Stopped trading; last bar 2026-05-18. |
-| `EATZ` | Stopped trading; last bar 2026-05-07. |
-
-# The ETF board
-
-`dist/etfs.html` is the fund universe on its own page. It exists because 89
-names is a different problem from 1,500: the whole universe fits on one screen,
-which lets the page do two things the combined list cannot.
-
-The first is the **strip** at the top — every fund as one mark, positioned by
-score and coloured by its correlation group, stacked where marks would collide.
-The shape of the ranking and how the groups sit inside it read before any row
-does. Clicking a mark scrolls to its row.
-
-The second is that **colour answers one question at a time**, and the Colour
-switch chooses which. Nothing else on the page is coloured — a score states its
-sign with a `+` or `−` rather than a green or a red — so a rail down the side of
-a row is never competing with anything: it is either the correlation group the
-fund sits in, or the score itself.
-
-Layout follows from that. The board is a wide table with a persistent basket
-rail rather than a tab, the window and skip controls sit in one bar above it,
-and the look-through opens inline under its fund instead of taking over the
-view. Weights and cash/percent live in the rail, next to the only thing they
-change.
-
-## The groups
-
-`src/cluster.js` runs the six steps at build time — PAM is O(k·N²) per swap pass
-and there is nothing about it a reader can change, so it belongs in the build
-alongside the scores:
-
-1. synchronised daily returns — the shipped vectors are the same 252 sessions
-   for every fund, so this holds by construction
-2. the 89 × 89 correlation matrix, a dot product of unit-norm vectors
-3. correlation to distance, `√((1−ρ)/2)` — a proper metric: identical 0,
-   uncorrelated 0.707, opposed 1
-4. PAM — greedy BUILD, then exhaustive SWAP until no swap improves
-5. three cuts, 5 / 8 / 10, chosen in the bar
-6. every fund with its nearest medoid, medoids moving until the total
-   within-group distance stops falling
-
-| k | silhouette | within-group distance | sizes |
-|---|---|---|---|
-| 5 | 0.136 | 33.08 | 28, 23, 22, 11, 5 |
-| 8 | 0.145 | 29.57 | 19, 19, 17, 9, 8, 6, 6, 5 |
-| 10 | 0.154 | 27.56 | 19, 16, 14, 8, 8, 6, 5, 5, 5, 3 |
-
-The silhouettes are low in absolute terms, which is the honest reading: these
-funds are one market and the groups are regions of it, not islands. The k=8 run
-is where the structure is most legible — a 19-fund technology-and-electrification
-block at mean ρ 0.65, a 19-fund consumer-and-internet block at 0.54, 17 funds of
-industrials, materials and water at 0.62, and at the tight end six precious- and
-base-metals miners at **0.80**.
-
-### Colour is assigned once, not per cut
-
-The obvious rule — slot by size rank — repaints the whole page every time the
-count changes, because the second-largest group at k=8 is rarely the
-second-largest at k=10. Colour is anchored on the k=8 run instead: each group in
-the other cuts inherits the slot of the reference group it overlaps most,
-largest first. Raising the count then reads as one group splitting rather than
-as a new page. At k=10 the aqua block divides into aqua (16) and violet (8) and
-the orange one sheds its technology half; everything else holds.
-
-Eight hues is the whole palette. Past that a group takes a neutral grey and
-position alone tells it from its neighbour — at k=10 that is the two smallest,
-eight funds between them. A ninth hue is never generated. The eight slots are
-the validated categorical order, checked in both themes; three of the light-mode
-steps sit under 3:1 against the surface, which is why every row carries its
-ticker as ink text and the group's own numbers sit in the band above it.
-
-Group **names** are deliberately absent. The centre of each group — the fund
-with the smallest total distance to the rest — gets a ring on its ticker, and
-the band states size and mean correlation. Naming a group after its medoid
-implies the medoid defines it, which is not what a medoid is.
-
-## Heat
-
-The other colouring drops the groups and paints the score: deep red, through a
-midpoint that recedes into the page, to acid green. Higher is greener.
-
-The **midpoint is pinned at a score of zero**, not at the middle of the range,
-because zero is a real place on this axis — the return was flat. Each arm is
-then scaled by its own reach, so both ends of the ramp are in use however
-lopsided the day happens to be (right now −1.37 to +2.85, so zero sits 32% of
-the way across). The domain is the whole universe, never the filtered set: a
-search that hides forty funds must not repaint the ones it leaves, or the same
-colour would mean two different scores a second apart.
-
-The scale **follows the Window and Skip switches** rather than being pinned to
-one window, so the colour can never disagree with the number printed beside it.
-Set Window to 12 mo and Skip to 100% and it is exactly 12-1 return over 12-1
-volatility.
-
-The ramp under the strip is the legend, and it is drawn in the strip's own
-coordinates — same domain, same 0.6% inset — so a colour on the bar sits
-directly under the marks that wear it, with a tick where zero falls. Under Heat
-the strip is doubly encoded: position and hue carry the same number, which is
-what makes the bar readable as a key at all.
-
-```
---heat-lo   #b02616  /  #e2563a      6.5 : 1 light,  4.9 : 1 dark
---heat-mid  #e9e5d8  /  #33322c      recedes into the surface, by design
---heat-hi   #5aa300  /  #9ede1f      3.0 : 1 light, 11.3 : 1 dark
-```
-
-Mixing happens in CSS — `color-mix(in oklab, var(--heat-hi) 62%, var(--heat-mid))`
-— so one ramp definition serves both themes, and a viewer switching theme
-mid-session gets the right end colours with no re-render. It also means the
-interpolation is perceptual rather than a straight line through sRGB.
-
-**Red against green is the hardest pair a colour-blind reader is asked to
-separate**, so it is never the only channel. Every row prints its score in ink;
-on the strip a mark's x position carries the same number its fill does; and the
-two ends differ in lightness as well as hue. The one place the recessive
-midpoint would have cost something is the strip, where a fund scoring near zero
-would simply vanish — so strip marks take a hairline under Heat and stay on the
-page whatever their fill.
-
-Group furniture stands down when the colour stops being the group: the ring on a
-group's centre disappears, and the band over a group loses its swatch but keeps
-its size, mean correlation and centre in text. Arranging by group and colouring
-by heat is a useful pair — it shows which groups are carrying the ranking and
-which are dragging.
-
-## What the board adds to the basket
-
-The rail carries two lines the phone page does not: **colour groups**, how many
-distinct groups the basket spans, and **closest pair**, the highest correlation
-between any two names in it. They answer different halves of the same question —
-a basket can look spread across groups and still hold one duplicated position.
+- Screens render; the tab bar switches and resets scroll
+- The last row and the Portfolio footnote clear the tab bar
+- Nothing overflows horizontally; the subtitle holds one line down to 320px
+- Every row is at least 44px tall and each select control has a 44x44 hit area
+- Selecting, deselecting, and persistence across reload and tab switches
+- Tapping the row body opens detail; tapping the select control does not
+- Detail shows every required field, defaults to 1Y, and redraws per window
+- Swiping moves through the ranked list, keeps the window, and stops at the ends
+- Selection stays in step across Ranks, detail, and Portfolio
+- Back restores the Ranks scroll position exactly
+- Portfolio shows only selected stocks, in ranked order, with no editable field
+- Every holding count from 1 to 100 displays weights totalling exactly 100.0%
+- Adding or removing in Ranks, detail, or Portfolio re-weights the rest at once
+- The empty state appears with nothing selected
+- Every displayed price and day change matches `market.json` exactly
+- Each graph window draws a distinct real series over the right date range
+- The page makes no external network request at runtime
+- No credential or provider hostname appears anywhere in the built output
+- Every momentum figure on screen matches a recomputation from the raw closes
+- The skipped month cannot change either signal, checked by tampering with it
+- Ranks is ordered by the blend, and each row's rank matches its position
+- The track follows the finger, with no easing until the gesture ends
+- A vertical or mostly-vertical drag never changes stock, nor does a short one
+- A flick turns the page; the same distance taken slowly does not
+- The line draws on open and on a window change, but not while swiping
+- Swiping does not re-create any page, checked with a marker on each node
+- Selecting from ticker detail does not rebuild the pager either
+- The theme toggle round-trips and survives a reload
+- All hundred are common stock or ADRs, each on an exchange its type allows
+- No two holdings are the same company, checked on CIK
+- Every stock's history ends on the same session
+- ADRs carry no badge, no adjusted figure and no different weight
+- Every one has a pane, a graph in each window, and a full set of stat rows
+- Ranks, detail and Portfolio agree across all hundred
+- No console errors, and `npm run build` passes strict typecheck

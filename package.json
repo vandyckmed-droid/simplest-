@@ -1,16 +1,27 @@
 {
-  "name": "ranks",
-  "version": "1.0.0",
+  "name": "stock-app",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Volatility-adjusted momentum ranking over every tradeable US stock, plus a standalone board for the thematic ETF list",
+  "description": "iPhone-first stock app. You choose the stocks; the system calculates everything else.",
   "scripts": {
-    "etf:check": "node src/etf-check.js",
-    "build": "node src/ranks-build.js && node src/etf-build.js && node src/ranks-render.js && node src/etfs-render.js",
-    "data": "node src/ranks-build.js",
-    "etfs": "node src/etf-build.js",
-    "render": "node src/ranks-render.js",
-    "board": "node src/etfs-render.js"
+    "data": "node tools/build-market-data.mjs",
+    "dev": "vite",
+    "test": "node --experimental-strip-types tools/test-momentum.ts && node tools/test-universe.mjs",
+    "build": "npm test && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
   },
   "engines": {
     "node": ">=20"

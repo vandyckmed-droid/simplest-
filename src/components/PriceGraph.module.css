@@ -1,0 +1,45 @@
+/* Full-bleed and tall: this is the element the screen is built around. */
+.graph {
+  display: block;
+  width: 100%;
+  height: 14.5rem;
+  overflow: visible;
+}
+
+.line {
+  fill: none;
+  stroke: var(--graph-stroke);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* The viewBox stretches horizontally; the stroke must not. */
+  vector-effect: non-scaling-stroke;
+}
+
+.baseline {
+  stroke: var(--separator-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  vector-effect: non-scaling-stroke;
+}
+
+/*
+ * The line draws itself from left to right by uncovering it. A dash-offset
+ * draw would be the obvious approach, but `non-scaling-stroke` measures dashes
+ * after the viewBox has been stretched, so the pattern repeats instead of
+ * running once. Clipping is immune to that.
+ *
+ * It ends slightly outside the box so the last point's stroke is never shaved.
+ */
+.reveal {
+  animation: draw 0.62s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes draw {
+  from {
+    clip-path: inset(-2% 100% -2% -2%);
+  }
+  to {
+    clip-path: inset(-2% -2% -2% -2%);
+  }
+}
