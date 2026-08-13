@@ -74,6 +74,7 @@ Test
 - ✓ **Phase 7** — 6–1 momentum + Momentum Blend
 - ✓ **Phase 8** — Ticker-detail interaction
 - ✓ **Phase 9** — 50-stock universe
+- ✓ **Phase 10** — ADRs eligible
 
 ## Commands
 
@@ -81,7 +82,7 @@ Test
 npm install
 npm run data     # rebuild src/data/market.json from the API (needs API_KEY)
 npm run dev      # http://localhost:5173
-npm test         # 12–1 momentum maths, against hand-worked examples
+npm test         # momentum maths and the universe rules, against hand-worked examples
 npm run build    # tests + strict typecheck + production build
 npm run preview  # serve the production build
 ```

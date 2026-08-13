@@ -7,8 +7,8 @@
   "scripts": {
     "data": "node tools/build-market-data.mjs",
     "dev": "vite",
-    "test": "node --experimental-strip-types tools/test-momentum.ts",
-    "build": "node --experimental-strip-types tools/test-momentum.ts && tsc --noEmit && vite build",
+    "test": "node --experimental-strip-types tools/test-momentum.ts && node tools/test-universe.mjs",
+    "build": "npm test && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

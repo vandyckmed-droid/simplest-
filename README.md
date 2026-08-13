@@ -6,7 +6,7 @@ The only actions the product ever offers are **look, sort, filter, inspect,
 select, deselect**. Portfolio weights are never entered by hand — they are
 derived. Every phase is built against that rule.
 
-## Status — Phase 9: A 50-stock universe
+## Status — Phase 10: ADRs eligible
 
 | Built | Not built yet |
 | --- | --- |
@@ -19,7 +19,8 @@ derived. Every phase is built against that rule.
 | Swipe left/right through the ranked list | |
 | Portfolio: your selections, equal-weighted to 100% | |
 | Real adjusted end-of-day prices, names, and logos | |
-| The 50 most liquid US common stocks | |
+| The 50 most liquid US-listed companies | |
+| ADRs, competing on the same liquidity rule | |
 | Light and dark mode | |
 
 ## The momentum signals
@@ -68,32 +69,74 @@ from the raw prices.
 Fifty names, chosen by a rule rather than by hand, so the list can be rebuilt
 from scratch and come back the same. `tools/universe.mjs` owns it:
 
-1. Ask the provider's screener for actively traded US stocks on NYSE, Nasdaq
-   or NYSE American, above $2bn of market cap and $5 a share. ETFs and funds
-   are excluded by the screener.
-2. Keep only ordinary common stock. The symbol is what decides: plain tickers
-   plus the A/B classes that are still common stock. Preferreds (`BAC-PB`),
-   warrants, rights and units all carry a suffix the pattern will not match.
-3. Take the 120 most active of those as a pool — this only bounds how much
+1. Ask the provider's screener for actively traded stocks on NYSE, Nasdaq or
+   NYSE American, above $2bn of market cap and $5 a share, from any country.
+   ETFs and funds are excluded by the screener.
+2. Drop anything whose symbol is not a plain ticker or one of the A/B classes
+   that are still common stock. Preferreds (`BAC-PB`), warrants, rights and
+   units all carry a suffix the pattern will not match.
+3. Take the 160 most active of those as a pool — this only bounds how much
    history is downloaded.
-4. Measure each one properly from our own adjusted bars: the **median daily
-   dollar volume over the last 63 sessions**. A median rather than a mean, so
-   one frantic day cannot buy a name its way in.
-5. Drop anything without the 253 sessions the 12–1 signal needs.
-6. Keep the top 50. Ties break on symbol, so the same data always gives the
+4. Settle each candidate's **security type** from its profile, and keep only
+   domestic common stock and ADRs. The rules are below.
+5. Measure each survivor properly from our own adjusted bars: the **median
+   daily dollar volume over the last 63 sessions**. A median rather than a
+   mean, so one frantic day cannot buy a name its way in.
+6. Drop anything without the 253 sessions the 12–1 signal needs.
+7. Keep one listing per company — the most liquid one.
+8. Keep the top 50. Ties break on symbol, so the same data always gives the
    same list in the same order.
 
-At the last build that cut off at $1.9bn a day — 33 Nasdaq names and 17 NYSE.
-Two are younger than the 2Y graph (SanDisk, 375 sessions; CoreWeave, 345);
-both clear the 12–1 window comfortably, and their longest graph span simply
-starts at their first session.
+At the last build that cut off at $2.0bn a day — 33 Nasdaq names and 17 NYSE,
+three of them ADRs. Two are younger than the 2Y graph (SanDisk, 375 sessions;
+CoreWeave, 345); both clear the 12–1 window comfortably, and their longest
+graph span simply starts at their first session.
+
+### What counts as eligible
+
+| Security | Eligible where |
+| --- | --- |
+| US common stock | NYSE, Nasdaq, NYSE American |
+| ADR | NYSE, Nasdaq |
+| Everything else | nowhere |
+
+An ADR is admitted on the provider's own `isAdr` flag rather than on being
+foreign, because those are not the same question. A foreign company whose
+ordinary shares list directly — Shopify, Linde, Accenture, MercadoLibre — is
+neither a domestic common stock nor a depositary receipt, so it stays out;
+the security type this phase admitted is the ADR, and nothing wider. OTC
+never arises: the screener is asked for three exchanges and nothing else, so
+an over-the-counter receipt is never a candidate, and NYSE American is
+allowed for domestic common stock but not for ADRs.
+
+ADRs are otherwise indistinguishable. They clear the same liquidity median
+and the same history floor, they are scored by the same functions against the
+same cross-section, and no row, figure or weight is adjusted because a holding
+is a receipt. The build reports which of the fifty are ADRs, and every
+exclusion it made, so the rule can be read off the output rather than trusted.
+
+### One listing per company
+
+Two lines into the same business would be two positions in a portfolio that
+thinks it holds two things. Listings are grouped by the registrant's **CIK**,
+which share classes have in common — Alphabet's A and C shares answer to one
+key — and the most liquid of each group is kept. Where the provider has no
+CIK, the company name with its legal form stripped decides instead; that is
+the weaker test, so every merge it makes is named in the build notes. This is
+what keeps `GOOG` out while `GOOGL` stays in.
 
 ## Market data
 
 `src/data/market.json` is generated by `npm run data` and committed. It holds,
-for each of the fifty, the company name, exchange, the latest adjusted close,
-the day change, market cap, median dollar volume, and 540 sessions of adjusted
-daily closes.
+for each of the fifty, the company name, exchange, domicile, whether it is an
+ADR, the latest adjusted close, the day change, market cap, median dollar
+volume, and 540 sessions of adjusted daily closes.
+
+Every series ends on the same session. The provider can be a day ahead on
+some symbols — a partly-filled current day, or simply a series fetched later
+than the rest — and a cross-sectional rank only means something if every name
+is measured to the same date, so bars past the date most of the field last
+traded are trimmed off and the trim is reported.
 
 ```sh
 npm run data              # refresh from the API (needs API_KEY)
@@ -262,7 +305,8 @@ src/
 tools/                 build-time only; never shipped to the browser
   test-momentum.ts     hand-worked tests for the momentum maths
   fmp.mjs              provider client, reads API_KEY from the environment
-  universe.mjs         the liquidity rule that picks the fifty
+  universe.mjs         the eligibility and liquidity rules that pick the fifty
+  test-universe.mjs    hand-worked tests for those rules
   cache.mjs            on-disk cache of raw responses
   build-market-data.mjs  fetch -> validate -> src/data/market.json
 ```
@@ -307,7 +351,10 @@ Checked in Chromium at iPhone 14 Pro and 320px widths, in light and dark:
 - Swiping does not re-create any page, checked with a marker on each node
 - Selecting from ticker detail does not rebuild the pager either
 - The theme toggle round-trips and survives a reload
-- All fifty names are common stock on NYSE, Nasdaq or NYSE American
+- All fifty are common stock or ADRs, each on an exchange its type allows
+- No two holdings are the same company, checked on CIK
+- Every stock's history ends on the same session
+- ADRs carry no badge, no adjusted figure and no different weight
 - Every one has a pane, a graph in each window, and a full set of stat rows
 - Ranks, detail and Portfolio agree across all fifty
 - No console errors, and `npm run build` passes strict typecheck

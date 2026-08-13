@@ -11,7 +11,7 @@
  * `--refresh` ignores the on-disk cache and re-downloads everything.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cached } from './cache.mjs';
@@ -42,18 +42,53 @@ const today = new Date().toISOString().slice(0, 10);
 const round = (value, places) => Number(value.toFixed(places));
 
 /**
- * Turns raw provider bars into ascending, validated series.
- * Returns the series plus anything suspicious that was dropped.
+ * The session the whole field is measured to.
+ *
+ * A cross-sectional rank only means something if every name is measured to
+ * the same date, and the provider can be a session ahead on some symbols —
+ * a partly-filled current day, or simply a series fetched later in the day
+ * than the rest. The date most of the field last traded is the honest common
+ * ground: anything after it is trimmed, so no stock is ranked on an extra
+ * day its neighbours have not had.
  */
-function normalizeBars(symbol, rows) {
+function commonAsOf(entries) {
+  const counts = new Map();
+  for (const entry of entries) {
+    const dates = (entry.bars ?? [])
+      .map((bar) => bar?.date)
+      .filter((date) => typeof date === 'string');
+    if (!dates.length) continue;
+    const newest = dates.reduce((a, b) => (a > b ? a : b));
+    counts.set(newest, (counts.get(newest) ?? 0) + 1);
+  }
+  let best = null;
+  for (const [date, count] of counts) {
+    // Most of the field wins; a tie goes to the later session.
+    if (!best || count > best.count || (count === best.count && date > best.date)) {
+      best = { date, count };
+    }
+  }
+  return best?.date ?? null;
+}
+
+/**
+ * Turns raw provider bars into ascending, validated series, ending no later
+ * than `asOf`. Returns the series plus anything suspicious that was dropped.
+ */
+function normalizeBars(symbol, rows, asOf) {
   const problems = [];
   const seen = new Set();
   const clean = [];
+  let trimmed = 0;
 
   for (const row of rows) {
     const { date, adjClose } = row ?? {};
     if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       problems.push(`${symbol}: bar with an unusable date (${JSON.stringify(date)})`);
+      continue;
+    }
+    if (asOf && date > asOf) {
+      trimmed += 1;
       continue;
     }
     if (typeof adjClose !== 'number' || !Number.isFinite(adjClose) || adjClose <= 0) {
@@ -72,11 +107,16 @@ function normalizeBars(symbol, rows) {
   clean.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   if (clean.length < 2) throw new Error(`only ${clean.length} usable bars`);
-  return { clean: clean.slice(-KEEP_SESSIONS), problems };
+  return { clean: clean.slice(-KEEP_SESSIONS), problems, trimmed };
 }
 
-async function buildStock(entry) {
-  const { clean, problems } = normalizeBars(entry.symbol, entry.bars);
+async function buildStock(entry, asOf) {
+  const { clean, problems, trimmed } = normalizeBars(entry.symbol, entry.bars, asOf);
+  if (trimmed) {
+    problems.push(
+      `${entry.symbol}: ${trimmed} bar(s) after ${asOf} trimmed, to measure the field to one date`,
+    );
+  }
 
   const last = clean[clean.length - 1];
   const previous = clean[clean.length - 2];
@@ -86,24 +126,28 @@ async function buildStock(entry) {
 
   const dayChange = last.close / previous.close - 1;
 
-  // Cross-check our day change against the provider's own quote.
-  try {
-    const { value: rawProfile } = await cached(
-      `profile-${entry.symbol}`,
-      () => profile(entry.symbol),
-      { force },
-    );
-    if (Number.isFinite(rawProfile.changePercentage)) {
-      const theirs = rawProfile.changePercentage / 100;
-      if (Math.abs(theirs - dayChange) > 0.005) {
-        problems.push(
-          `${entry.symbol}: day change from adjusted closes (${(dayChange * 100).toFixed(2)}%) ` +
-            `differs from the provider quote (${(theirs * 100).toFixed(2)}%)`,
-        );
+  // Cross-check our day change against the provider's own quote — but only
+  // when we kept this symbol's newest bar. Once trimmed, the quote describes
+  // a later session than the one we measured, so a difference means nothing.
+  if (!trimmed) {
+    try {
+      const { value: rawProfile } = await cached(
+        `profile-${entry.symbol}`,
+        () => profile(entry.symbol),
+        { force },
+      );
+      if (Number.isFinite(rawProfile.changePercentage)) {
+        const theirs = rawProfile.changePercentage / 100;
+        if (Math.abs(theirs - dayChange) > 0.005) {
+          problems.push(
+            `${entry.symbol}: day change from adjusted closes (${(dayChange * 100).toFixed(2)}%) ` +
+              `differs from the provider quote (${(theirs * 100).toFixed(2)}%)`,
+          );
+        }
       }
+    } catch (error) {
+      problems.push(`${entry.symbol}: could not cross-check the day change — ${error.message}`);
     }
-  } catch (error) {
-    problems.push(`${entry.symbol}: could not cross-check the day change — ${error.message}`);
   }
 
   return {
@@ -111,6 +155,8 @@ async function buildStock(entry) {
       symbol: entry.symbol,
       name,
       exchange: entry.exchange,
+      country: entry.country,
+      isAdr: entry.isAdr,
       price: last.close,
       dayChange: round(dayChange, 6),
       marketCap: entry.marketCap,
@@ -123,6 +169,30 @@ async function buildStock(entry) {
     },
     problems,
   };
+}
+
+/**
+ * Deletes the marks of companies that are no longer in the universe. The
+ * folder is generated, so it should hold what the dataset holds and nothing
+ * else — a stale logo is a name the app dropped, still shipping in the bundle.
+ */
+async function pruneLogos(symbols) {
+  const keep = new Set(symbols.map((symbol) => `${symbol}.png`));
+  let removed = 0;
+  let files;
+  try {
+    files = await readdir(LOGO_DIR);
+  } catch {
+    return [];
+  }
+  const gone = [];
+  for (const file of files) {
+    if (!file.endsWith('.png') || keep.has(file)) continue;
+    await unlink(join(LOGO_DIR, file));
+    gone.push(file.replace(/\.png$/, ''));
+    removed += 1;
+  }
+  return removed ? [`removed ${removed} logo(s) for names no longer held: ${gone.join(', ')}`] : [];
 }
 
 async function saveLogo(symbol) {
@@ -179,10 +249,14 @@ async function main() {
   });
   problems.push(...notes);
 
+  // Fix the field's date before building anything, so every series ends on
+  // the same session and no stock is ranked on a day its neighbours lack.
+  const fieldAsOf = commonAsOf(chosen);
+
   const stocks = [];
   for (const entry of chosen) {
     try {
-      const result = await buildStock(entry);
+      const result = await buildStock(entry, fieldAsOf);
       stocks.push(result.stock);
       problems.push(...result.problems);
     } catch (error) {
@@ -202,6 +276,7 @@ async function main() {
       problems.push(`${stock.symbol}: logo download failed — ${error.message}`);
     }
   }
+  problems.push(...(await pruneLogos(stocks.map((s) => s.symbol))));
 
   // A stable, data-only order. Ranking is a calculation the app performs
   // from these closes, so no rank is stored here.
@@ -216,8 +291,9 @@ async function main() {
     source: 'Financial Modeling Prep — dividend- and split-adjusted daily closes',
     asOf,
     selection:
-      'The 50 most liquid US common stocks on NYSE, Nasdaq or NYSE American, ' +
-      'by median daily dollar volume over the last 63 sessions.',
+      'The 50 most liquid US-listed companies — domestic common stocks on ' +
+      'NYSE, Nasdaq or NYSE American, and ADRs on NYSE or Nasdaq — by median ' +
+      'daily dollar volume over the last 63 sessions, one listing per company.',
     stocks,
   };
 
@@ -230,6 +306,7 @@ async function main() {
   for (const [i, stock] of byLiquidity.entries()) {
     console.log(
       `  ${String(i + 1).padStart(2)} ${stock.symbol.padEnd(6)} ${stock.exchange.padEnd(6)} ` +
+        `${(stock.isAdr ? `ADR ${stock.country}` : 'common').padEnd(7)} ` +
         `${String(stock.history.closes.length).padStart(4)} bars  ` +
         `$${(stock.medianDollarVolume / 1e6).toFixed(0).padStart(6)}M/day  ${stock.name}`,
     );

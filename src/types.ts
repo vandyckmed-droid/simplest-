@@ -25,6 +25,10 @@ export interface Stock {
   name: string;
   /** NYSE, NASDAQ or AMEX (NYSE American). */
   exchange: string;
+  /** Where the issuer is domiciled. "US" for a domestic common stock. */
+  country: string | null;
+  /** True for an American Depositary Receipt. Changes nothing about scoring. */
+  isAdr: boolean;
   /** Latest adjusted close, in dollars. */
   price: number;
   /** Change from the previous adjusted close, as a fraction. */

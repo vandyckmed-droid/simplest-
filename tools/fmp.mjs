@@ -31,6 +31,9 @@ function safeUrl(url) {
 async function get(path, params = {}) {
   const url = new URL(`${BASE}/${path}`);
   for (const [key, value] of Object.entries(params)) {
+    // An absent value means "do not constrain on this", not the string
+    // "undefined" — which the provider answers with a 503.
+    if (value === undefined || value === null) continue;
     url.searchParams.set(key, String(value));
   }
   url.searchParams.set('apikey', apiKey());
