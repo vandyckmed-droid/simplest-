@@ -67,6 +67,7 @@ Test
 - ✓ **Phase 0** — Empty repository
 - ✓ **Phase 1** — App shell
 - ✓ **Phase 2** — Ranks
+- ✓ **Phase 3** — Ticker detail
 
 ## Commands
 

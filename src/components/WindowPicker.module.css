@@ -1,0 +1,31 @@
+.picker {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--gutter) var(--space-2);
+}
+
+.option {
+  flex: 1 1 0;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+/*
+ * The active window is marked in ink, never in the accent — the graph line
+ * is already carrying green or red, and a second colour would fight it.
+ */
+.option[aria-pressed='true'] {
+  background: var(--surface-pressed);
+  color: var(--ink);
+}
+
+.option:active {
+  opacity: 0.6;
+}

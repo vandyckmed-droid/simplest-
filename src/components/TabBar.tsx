@@ -17,11 +17,18 @@ const TABS: Tab[] = [
 interface TabBarProps {
   active: TabId;
   onSelect: (id: TabId) => void;
+  /** True while ticker detail covers the frame. */
+  hidden?: boolean;
 }
 
-export function TabBar({ active, onSelect }: TabBarProps) {
+export function TabBar({ active, onSelect, hidden = false }: TabBarProps) {
   return (
-    <nav className={styles.bar} role="tablist" aria-label="Sections">
+    <nav
+      className={styles.bar}
+      role="tablist"
+      aria-label="Sections"
+      aria-hidden={hidden}
+    >
       {TABS.map(({ id, label, Icon }) => (
         <button
           key={id}
@@ -31,6 +38,7 @@ export function TabBar({ active, onSelect }: TabBarProps) {
           aria-selected={active === id}
           aria-controls={`panel-${id}`}
           className={styles.tab}
+          tabIndex={hidden ? -1 : undefined}
           onClick={() => onSelect(id)}
         >
           <Icon size={23} />

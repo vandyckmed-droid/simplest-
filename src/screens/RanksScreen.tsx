@@ -4,16 +4,17 @@ import { Row } from '../components/Row';
 import { SelectControl } from '../components/SelectControl';
 import { RANKS, RANKS_SUBTITLE } from '../data/fixtures';
 import { directionOf, formatScore, formatSignedPercentWhole } from '../format';
+import { toggleSelection, useSelectedSymbols } from '../selectionStore';
 import type { Scheme } from '../useTheme';
-import { useSelection } from '../useSelection';
 
 interface RanksScreenProps {
   scheme: Scheme;
   onToggleScheme: () => void;
+  onOpen: (symbol: string) => void;
 }
 
-export function RanksScreen({ scheme, onToggleScheme }: RanksScreenProps) {
-  const selection = useSelection();
+export function RanksScreen({ scheme, onToggleScheme, onOpen }: RanksScreenProps) {
+  const selected = useSelectedSymbols();
 
   return (
     <Screen
@@ -30,18 +31,16 @@ export function RanksScreen({ scheme, onToggleScheme }: RanksScreenProps) {
             media={<LogoMark symbol={stock.symbol} />}
             primary={stock.symbol}
             value={formatScore(stock.momentum)}
-            meta={formatSignedPercentWhole(stock.return12m)}
-            metaDirection={directionOf(stock.return12m)}
+            meta={formatSignedPercentWhole(stock.return121)}
+            metaDirection={directionOf(stock.return121)}
             trailing={
               <SelectControl
-                selected={selection.isSelected(stock.symbol)}
+                selected={selected.includes(stock.symbol)}
                 label={stock.name}
-                onToggle={() => selection.toggle(stock.symbol)}
+                onToggle={() => toggleSelection(stock.symbol)}
               />
             }
-            // Opens ticker detail in a later phase. Inert for now, but the
-            // row still responds to a press so the affordance reads true.
-            onActivate={() => {}}
+            onActivate={() => onOpen(stock.symbol)}
           />
         ))}
       </List>

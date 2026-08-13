@@ -1,28 +1,32 @@
 /**
- * Static fake data for the Phase 1 shell and the Phase 2 Ranks screen.
+ * Static fake data for the shell, Ranks, and ticker detail.
  *
  * Nothing here is computed — not the momentum scores, not the returns, not
- * the portfolio totals or weights. Real data and the calculations behind it
- * arrive in later phases; this file exists so the layout can be judged with
- * realistic content.
+ * the volatilities, not the portfolio totals or weights. Real data and the
+ * calculations behind it arrive in later phases; this file exists so the
+ * layout can be judged with realistic content.
  */
 
 import type { Holding, Stock } from '../types';
 
 export const RANKS: Stock[] = [
-  { rank: 1, symbol: 'NVDA', name: 'NVIDIA', momentum: 96.4, return12m: 1.842 },
-  { rank: 2, symbol: 'AVGO', name: 'Broadcom', momentum: 93.1, return12m: 0.914 },
-  { rank: 3, symbol: 'CEG', name: 'Constellation Energy', momentum: 91.7, return12m: 1.126 },
-  { rank: 4, symbol: 'LLY', name: 'Eli Lilly', momentum: 88.2, return12m: 0.573 },
-  { rank: 5, symbol: 'ANET', name: 'Arista Networks', momentum: 85.9, return12m: 0.648 },
-  { rank: 6, symbol: 'COST', name: 'Costco Wholesale', momentum: 82.4, return12m: 0.412 },
-  { rank: 7, symbol: 'GE', name: 'GE Aerospace', momentum: 79.8, return12m: 0.487 },
-  { rank: 8, symbol: 'AXP', name: 'American Express', momentum: 76.3, return12m: 0.361 },
-  { rank: 9, symbol: 'WMT', name: 'Walmart', momentum: 74.1, return12m: 0.298 },
-  { rank: 10, symbol: 'JPM', name: 'JPMorgan Chase', momentum: 71.6, return12m: 0.234 },
+  { rank: 1, symbol: 'NVDA', name: 'NVIDIA', price: 138.42, dayChange: 0.0284, momentum: 96.4, return121: 1.842, volatility: 0.512 },
+  { rank: 2, symbol: 'AVGO', name: 'Broadcom', price: 242.18, dayChange: 0.0163, momentum: 93.1, return121: 0.914, volatility: 0.408 },
+  { rank: 3, symbol: 'CEG', name: 'Constellation Energy', price: 254.13, dayChange: 0.0317, momentum: 91.7, return121: 1.126, volatility: 0.446 },
+  { rank: 4, symbol: 'LLY', name: 'Eli Lilly', price: 812.55, dayChange: -0.0071, momentum: 88.2, return121: 0.573, volatility: 0.318 },
+  { rank: 5, symbol: 'ANET', name: 'Arista Networks', price: 371.28, dayChange: 0.0246, momentum: 85.9, return121: 0.648, volatility: 0.374 },
+  { rank: 6, symbol: 'COST', name: 'Costco Wholesale', price: 921.04, dayChange: 0.0042, momentum: 82.4, return121: 0.412, volatility: 0.201 },
+  { rank: 7, symbol: 'GE', name: 'GE Aerospace', price: 186.72, dayChange: 0.0209, momentum: 79.8, return121: 0.487, volatility: 0.286 },
+  { rank: 8, symbol: 'AXP', name: 'American Express', price: 274.63, dayChange: 0.0087, momentum: 76.3, return121: 0.361, volatility: 0.243 },
+  { rank: 9, symbol: 'WMT', name: 'Walmart', price: 80.46, dayChange: 0.0051, momentum: 74.1, return121: 0.298, volatility: 0.192 },
+  { rank: 10, symbol: 'JPM', name: 'JPMorgan Chase', price: 218.94, dayChange: 0.0033, momentum: 71.6, return121: 0.234, volatility: 0.224 },
 ];
 
 export const RANKS_SUBTITLE = 'Momentum blend · Aug 13';
+
+export function findStock(symbol: string): Stock | undefined {
+  return RANKS.find((stock) => stock.symbol === symbol);
+}
 
 export const HOLDINGS: Holding[] = [
   { symbol: 'NVDA', name: 'NVIDIA', weight: 0.184, value: 4472.18, dayChange: 0.0284 },

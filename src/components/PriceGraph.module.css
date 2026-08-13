@@ -1,0 +1,24 @@
+/* Full-bleed and tall: this is the element the screen is built around. */
+.graph {
+  display: block;
+  width: 100%;
+  height: 14.5rem;
+  overflow: visible;
+}
+
+.line {
+  fill: none;
+  stroke: var(--graph-stroke);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* The viewBox stretches horizontally; the stroke must not. */
+  vector-effect: non-scaling-stroke;
+}
+
+.baseline {
+  stroke: var(--separator-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  vector-effect: non-scaling-stroke;
+}
