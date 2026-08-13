@@ -71,6 +71,7 @@ Test
 - ✓ **Phase 4** — Basic portfolio + equal weights
 - ✓ **Phase 5** — Real market data
 - ✓ **Phase 6** — 12–1 momentum
+- ✓ **Phase 7** — 6–1 momentum + Momentum Blend
 
 ## Commands
 

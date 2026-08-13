@@ -15,11 +15,12 @@ import {
   formatMoney,
   formatPercentile,
   formatRatio,
+  formatScore,
   formatSignedPercent,
   formatSignedPercentWhole,
 } from '../format';
 import { toggleSelection, useSelectedSymbols } from '../selectionStore';
-import type { WindowId } from '../types';
+import type { MomentumWindow, WindowId } from '../types';
 import { useSwipe } from '../useSwipe';
 import styles from './DetailScreen.module.css';
 
@@ -33,6 +34,29 @@ type Direction = 'next' | 'prev' | 'none';
 
 /** Shown where a figure has not been worked out. */
 const PENDING = '—';
+
+/** The three rows describing one momentum window. */
+function windowStats(name: string, window: MomentumWindow | null) {
+  return [
+    {
+      label: `${name} Return`,
+      value: window ? formatSignedPercentWhole(window.totalReturn) : PENDING,
+      lead: false,
+    },
+    {
+      label: `${name} Risk-Adjusted Momentum`,
+      value:
+        window && window.riskAdjusted !== null ? formatRatio(window.riskAdjusted) : PENDING,
+      lead: false,
+    },
+    {
+      label: `${name} Rank`,
+      value:
+        window && window.percentile !== null ? formatPercentile(window.percentile) : PENDING,
+      lead: false,
+    },
+  ];
+}
 
 export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps) {
   // The window is chosen once per visit and kept while swiping between
@@ -77,29 +101,18 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
   const points = seriesFor(stock, window_);
   const range = rangeFor(stock, window_);
   const changeDirection = directionOf(stock.dayChange);
-  const momentum = stock.momentum;
+  const long = stock.momentum12_1;
+  const short = stock.momentum6_1;
 
-  // Momentum Blend stays empty until it is built.
+  // The blend leads: it is what the list is ranked by. Its two halves follow.
   const stats = [
     {
-      label: '12–1 Return',
-      value: momentum ? formatSignedPercentWhole(momentum.return12_1) : PENDING,
+      label: 'Momentum Blend',
+      value: stock.blend !== null ? formatScore(stock.blend) : PENDING,
+      lead: true,
     },
-    {
-      label: '12–1 Risk-Adjusted Momentum',
-      value:
-        momentum && momentum.riskAdjusted !== null
-          ? formatRatio(momentum.riskAdjusted)
-          : PENDING,
-    },
-    {
-      label: '12–1 Rank',
-      value:
-        momentum && momentum.percentile !== null
-          ? formatPercentile(momentum.percentile)
-          : PENDING,
-    },
-    { label: 'Momentum Blend', value: PENDING },
+    ...windowStats('12–1', long),
+    ...windowStats('6–1', short),
   ];
 
   return (
@@ -158,9 +171,9 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
           <WindowPicker active={window_} onSelect={setWindow} />
 
           <ul className={styles.stats}>
-            {stats.map(({ label, value }) => (
+            {stats.map(({ label, value, lead }) => (
               <li key={label}>
-                <div className={styles.stat}>
+                <div className={styles.stat} data-lead={lead || undefined}>
                   <span className={styles.statLabel}>{label}</span>
                   <span
                     className={`${styles.statValue} tnum`}
@@ -173,9 +186,9 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
             ))}
           </ul>
           <p className={styles.footnote}>
-            {momentum
-              ? `12–1 momentum measures ${formatAsOfLong(momentum.from)} to ${formatAsOfLong(momentum.to)}, skipping the most recent month. Risk-adjusted is that return divided by annualised volatility over the same window; the rank is its percentile across the ${RANKS.length} names here.`
-              : 'Not enough price history to measure 12–1 momentum.'}
+            {long && short
+              ? `Momentum Blend is half the 12–1 rank plus half the 6–1 rank. 12–1 measures ${formatAsOfLong(long.from)} to ${formatAsOfLong(long.to)}; 6–1 measures ${formatAsOfLong(short.from)} to ${formatAsOfLong(short.to)}. Both skip the most recent month. Risk-adjusted is the window's return divided by its annualised volatility, and each rank is a percentile across the ${RANKS.length} names here.`
+              : 'Not enough price history to measure momentum.'}
           </p>
         </article>
       </div>

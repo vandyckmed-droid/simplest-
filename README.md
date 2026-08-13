@@ -6,34 +6,48 @@ The only actions the product ever offers are **look, sort, filter, inspect,
 select, deselect**. Portfolio weights are never entered by hand — they are
 derived. Every phase is built against that rule.
 
-## Status — Phase 6: 12–1 Momentum
+## Status — Phase 7: 6–1 Momentum and the Blend
 
 | Built | Not built yet |
 | --- | --- |
 | iPhone-first layout with safe-area handling | The 500-name universe |
-| Ranks: rank, real logo, ticker, price, day change | 6–1 momentum |
-| Select / deselect, persisted on the device | Momentum Blend |
-| Ticker detail: price, real graph, 1M–2Y windows | Covariance, clustering, HRP |
-| 12–1 return, risk-adjusted momentum, and rank | Sorting and filtering |
-| Swipe left/right through the ranked list | Intraday prices |
+| Ranks, ordered by Momentum Blend | Covariance, correlation, clustering, HRP |
+| Select / deselect, persisted on the device | Weighting beyond equal |
+| Ticker detail: price, real graph, 1M–2Y windows | User-facing sort and filter controls |
+| 12–1 and 6–1 return, risk-adjusted momentum, and rank | Intraday prices |
+| Momentum Blend, the primary ranking value | |
+| Swipe left/right through the ranked list | |
 | Portfolio: your selections, equal-weighted to 100% | |
 | Real adjusted end-of-day prices, names, and logos | |
 | Light and dark mode | |
 
-## The 12–1 signal
+## The momentum signals
 
 `src/momentum.ts` holds the maths as pure functions over an ascending series
-of adjusted closes. Trading day −k is `closes[length - 1 - k]`, and the window
-runs from day −252 through day −21 inclusive — a year of prices with the most
-recent month skipped, so the last few weeks' reversal does not contaminate the
-measurement.
+of adjusted closes. Trading day −k is `closes[length - 1 - k]`. Both windows
+end at day −21, skipping the most recent month so the last few weeks'
+reversal does not contaminate the measurement:
+
+| Window | Span |
+| --- | --- |
+| 12–1 | day −252 → day −21 |
+| 6–1 | day −126 → day −21 |
+
+Both go through the same `momentumWindow` function, so they cannot drift
+apart in how they measure.
 
 | Figure | How |
 | --- | --- |
-| 12–1 Return | `P(−21) / P(−252) − 1` |
+| Return | `P(−21) / P(−lookback) − 1` |
 | Volatility | sample standard deviation of daily log returns in that window, × √252 |
 | Risk-Adjusted Momentum | return ÷ volatility |
-| 12–1 Rank | `100 × (names with a lower risk-adjusted value) / (count − 1)` |
+| Rank | `100 × (names with a lower risk-adjusted value) / (count − 1)` |
+| **Momentum Blend** | `0.5 × 12–1 rank + 0.5 × 6–1 rank` |
+
+The blend is the primary ranking value: it orders the Ranks screen and sets
+each row's rank number. A stock missing either window has no blend rather
+than a half-informed one, and sorts to the bottom; ties fall back to the
+symbol so the order is stable.
 
 Ties share the lower percentile, so the weakest name sits at 0 and the
 strongest at 100. It is shown out of 100 — "89 / 100" — rather than as an
@@ -43,8 +57,10 @@ around 1e-16 of "volatility" on a flat series, which is why the guard is a
 small epsilon and not a test against zero.
 
 Everything is derived once from the stored closes, so the same dataset always
-gives the same numbers. `npm test` checks each step against examples worked
-out by hand, and re-derives every stock's return straight from the raw prices.
+gives the same numbers — no rank is stored in `market.json`, because ranking
+is a calculation rather than data. `npm test` checks each step against
+examples worked out by hand, and re-derives every stock's returns straight
+from the raw prices.
 
 ## Market data
 
@@ -229,8 +245,8 @@ Checked in Chromium at iPhone 14 Pro and 320px widths, in light and dark:
 - Each graph window draws a distinct real series over the right date range
 - The page makes no external network request at runtime
 - No credential or provider hostname appears anywhere in the built output
-- Every 12–1 figure on screen matches a recomputation from the raw closes
-- The skipped month cannot change the signal, checked by tampering with it
-- Momentum Blend stays empty
+- Every momentum figure on screen matches a recomputation from the raw closes
+- The skipped month cannot change either signal, checked by tampering with it
+- Ranks is ordered by the blend, and each row's rank matches its position
 - The theme toggle round-trips and survives a reload
 - No console errors, and `npm run build` passes strict typecheck

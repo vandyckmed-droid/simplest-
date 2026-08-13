@@ -171,3 +171,14 @@
   color: var(--ink-tertiary);
   font-size: var(--text-caption);
 }
+
+/* The blend is what the list is ranked by, so it carries more weight. */
+.stat[data-lead] .statLabel {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.stat[data-lead] .statValue {
+  font-size: var(--text-title);
+  letter-spacing: -0.02em;
+}

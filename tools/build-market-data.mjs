@@ -168,12 +168,9 @@ async function main() {
     }
   }
 
-  // Ranked by market cap. Momentum is a later phase; this keeps the order
-  // stable and meaningful in the meantime.
-  stocks.sort((a, b) => b.marketCap - a.marketCap);
-  stocks.forEach((stock, i) => {
-    stock.rank = i + 1;
-  });
+  // A stable, data-only order. Ranking is a calculation the app performs
+  // from these closes, so no rank is stored here.
+  stocks.sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0));
 
   const asOf = stocks.map((s) => s.asOf).sort().at(-1);
   const stale = stocks.filter((s) => s.asOf !== asOf);
@@ -185,7 +182,6 @@ async function main() {
     source: 'Financial Modeling Prep — dividend- and split-adjusted daily closes',
     asOf,
     stocks: stocks.map((stock) => ({
-      rank: stock.rank,
       symbol: stock.symbol,
       name: stock.name,
       price: stock.price,
@@ -203,7 +199,7 @@ async function main() {
   console.log(`Logos: ${logos.length}/${stocks.length}`);
   for (const stock of dataset.stocks) {
     console.log(
-      `  ${String(stock.rank).padStart(2)} ${stock.symbol.padEnd(5)} ` +
+      `  ${stock.symbol.padEnd(5)} ` +
       `${String(stock.history.closes.length).padStart(4)} bars  ` +
       `${stock.history.dates[0]}..${stock.asOf}  ` +
       `$${stock.price.toFixed(2)}  ${(stock.dayChange * 100).toFixed(2)}%  ${stock.name}`,

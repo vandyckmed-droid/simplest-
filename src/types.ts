@@ -6,9 +6,9 @@ export interface History {
   closes: number[];
 }
 
-/** The 12–1 momentum figures for one stock, cross-sectionally ranked. */
-export interface Momentum12_1 {
-  return12_1: number;
+/** One momentum window for one stock, cross-sectionally ranked. */
+export interface MomentumWindow {
+  totalReturn: number;
   volatility: number;
   riskAdjusted: number | null;
   /** Percentile of the risk-adjusted value across the field, 0–100. */
@@ -19,7 +19,7 @@ export interface Momentum12_1 {
 }
 
 export interface Stock {
-  /** Position in the list. Ranked by market cap until momentum exists. */
+  /** Position in the list, by Momentum Blend. */
   rank: number;
   symbol: string;
   name: string;
@@ -31,8 +31,11 @@ export interface Stock {
   /** Date of the latest close, e.g. "2026-08-12". */
   asOf: string;
   history: History;
-  /** Null when the history is too short to cover the 12–1 window. */
-  momentum: Momentum12_1 | null;
+  /** Null when the history is too short to cover the window. */
+  momentum12_1: MomentumWindow | null;
+  momentum6_1: MomentumWindow | null;
+  /** Half the 12–1 percentile plus half the 6–1 percentile, 0–100. */
+  blend: number | null;
 }
 
 /** A selected stock and the weight the system gave it. Never authored. */

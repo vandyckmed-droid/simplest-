@@ -1,5 +1,5 @@
 /**
- * The 12–1 momentum signal.
+ * Momentum signals.
  *
  * Pure functions over an ascending series of adjusted closes. Nothing here
  * reads global state or the clock, so the same prices always give the same
@@ -8,14 +8,18 @@
  * Conventions
  * -----------
  * Trading day −k is `closes[closes.length - 1 - k]`; day 0 is the latest close.
- * The 12–1 window runs from day −252 through day −21 inclusive: a year of
- * prices with the most recent month skipped, which is the standard way to
- * measure momentum without the short-term reversal in the last few weeks.
+ * A momentum window runs from day −lookback through day −skip inclusive. Both
+ * signals skip the most recent month, which keeps the short-term reversal in
+ * the last few weeks out of the measurement:
+ *
+ *   12–1   day −252 → day −21
+ *    6–1   day −126 → day −21
  */
 
-/** Trading days back to where the window opens. */
-export const LOOKBACK_DAYS = 252;
-/** Trading days skipped at the recent end. */
+/** Trading days back to where each window opens. */
+export const LOOKBACK_12_1 = 252;
+export const LOOKBACK_6_1 = 126;
+/** Trading days skipped at the recent end, shared by both windows. */
 export const SKIP_DAYS = 21;
 /** Trading days in a year, for annualising volatility. */
 export const TRADING_DAYS_PER_YEAR = 252;
@@ -26,17 +30,21 @@ export const TRADING_DAYS_PER_YEAR = 252;
  */
 export const MIN_VOLATILITY = 1e-8;
 
+/** How the two percentiles combine into the blend. */
+export const BLEND_WEIGHT_12_1 = 0.5;
+export const BLEND_WEIGHT_6_1 = 0.5;
+
 export interface WindowOptions {
   lookback?: number;
   skip?: number;
 }
 
-export interface Momentum {
+export interface MomentumResult {
   /** Simple return from the open of the window to its close. */
-  return12_1: number;
+  totalReturn: number;
   /** Annualised realised volatility of daily log returns in the window. */
   volatility: number;
-  /** Return divided by volatility. Null when volatility is zero. */
+  /** Return divided by volatility. Null when there is no volatility. */
   riskAdjusted: number | null;
   /** The window actually used, as indices into the close series. */
   fromIndex: number;
@@ -49,7 +57,7 @@ export interface Momentum {
  */
 export function windowSlice(
   closes: number[],
-  { lookback = LOOKBACK_DAYS, skip = SKIP_DAYS }: WindowOptions = {},
+  { lookback = LOOKBACK_12_1, skip = SKIP_DAYS }: WindowOptions = {},
 ): { slice: number[]; fromIndex: number; toIndex: number } | null {
   if (lookback <= skip) return null;
   const last = closes.length - 1;
@@ -89,23 +97,38 @@ export function annualizedVolatility(returns: number[]): number {
 }
 
 /**
- * The 12–1 figures for one stock, or null when its history is too short.
+ * Return, volatility and their ratio over one window, or null when the
+ * history is too short. Both signals go through here, so they cannot drift
+ * apart in how they measure.
  */
-export function momentum12_1(closes: number[], options: WindowOptions = {}): Momentum | null {
+export function momentumWindow(
+  closes: number[],
+  options: WindowOptions = {},
+): MomentumResult | null {
   const window = windowSlice(closes, options);
   if (!window) return null;
 
-  const return12_1 = totalReturn(window.slice);
+  const windowReturn = totalReturn(window.slice);
   const volatility = annualizedVolatility(logReturns(window.slice));
 
   return {
-    return12_1,
+    totalReturn: windowReturn,
     volatility,
     // A flat price line has no risk to adjust for; say so rather than divide.
-    riskAdjusted: volatility > MIN_VOLATILITY ? return12_1 / volatility : null,
+    riskAdjusted: volatility > MIN_VOLATILITY ? windowReturn / volatility : null,
     fromIndex: window.fromIndex,
     toIndex: window.toIndex,
   };
+}
+
+/** Day −252 → day −21. */
+export function momentum12_1(closes: number[], options: WindowOptions = {}): MomentumResult | null {
+  return momentumWindow(closes, { lookback: LOOKBACK_12_1, skip: SKIP_DAYS, ...options });
+}
+
+/** Day −126 → day −21. */
+export function momentum6_1(closes: number[], options: WindowOptions = {}): MomentumResult | null {
+  return momentumWindow(closes, { lookback: LOOKBACK_6_1, skip: SKIP_DAYS, ...options });
 }
 
 /**
@@ -127,4 +150,19 @@ export function percentileRanks(values: (number | null)[]): (number | null)[] {
     const below = ranked.filter((other) => other < value).length;
     return (100 * below) / (ranked.length - 1);
   });
+}
+
+/**
+ * Momentum Blend: half the 12–1 percentile, half the 6–1 percentile.
+ *
+ * Both inputs are already on the same 0–100 scale, so the blend is too. It
+ * needs both halves — a stock missing either window has no blend rather than
+ * a half-informed one.
+ */
+export function momentumBlend(
+  percentile12_1: number | null,
+  percentile6_1: number | null,
+): number | null {
+  if (percentile12_1 === null || percentile6_1 === null) return null;
+  return BLEND_WEIGHT_12_1 * percentile12_1 + BLEND_WEIGHT_6_1 * percentile6_1;
 }

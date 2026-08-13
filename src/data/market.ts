@@ -8,33 +8,63 @@
  */
 
 import dataset from './market.json';
-import { momentum12_1, percentileRanks } from '../momentum';
-import type { Momentum12_1, Stock, WindowId } from '../types';
+import { momentum12_1, momentum6_1, momentumBlend, percentileRanks } from '../momentum';
+import type { MomentumWindow, Stock, WindowId } from '../types';
+import type { MomentumResult } from '../momentum';
 
 /**
- * The 12–1 signal is derived here, once, from the stored adjusted closes.
- * The maths lives in `src/momentum.ts` and is tested against hand-worked
- * examples; this only joins it to the dataset and ranks the field.
+ * The momentum signals are derived here, once, from the stored adjusted
+ * closes. The maths lives in `src/momentum.ts` and is tested against
+ * hand-worked examples; this only joins it to the dataset, ranks the field,
+ * and orders the list by the blend.
  */
-function withMomentum(stocks: typeof dataset.stocks): Stock[] {
-  const computed = stocks.map((stock) => momentum12_1(stock.history.closes));
-  const percentiles = percentileRanks(computed.map((m) => m?.riskAdjusted ?? null));
+type RawStock = (typeof dataset.stocks)[number];
 
-  return stocks.map((stock, i) => {
-    const m = computed[i];
-    const momentum: Momentum12_1 | null = m && {
-      return12_1: m.return12_1,
-      volatility: m.volatility,
-      riskAdjusted: m.riskAdjusted,
-      percentile: percentiles[i],
-      from: stock.history.dates[m.fromIndex],
-      to: stock.history.dates[m.toIndex],
-    };
-    return { ...stock, momentum: momentum ?? null };
-  });
+function attach(
+  stock: RawStock,
+  result: MomentumResult | null,
+  percentile: number | null,
+): MomentumWindow | null {
+  if (!result) return null;
+  return {
+    totalReturn: result.totalReturn,
+    volatility: result.volatility,
+    riskAdjusted: result.riskAdjusted,
+    percentile,
+    from: stock.history.dates[result.fromIndex],
+    to: stock.history.dates[result.toIndex],
+  };
 }
 
-export const RANKS: Stock[] = withMomentum(dataset.stocks);
+function rankUniverse(stocks: RawStock[]): Stock[] {
+  const long = stocks.map((s) => momentum12_1(s.history.closes));
+  const short = stocks.map((s) => momentum6_1(s.history.closes));
+  const longPct = percentileRanks(long.map((m) => m?.riskAdjusted ?? null));
+  const shortPct = percentileRanks(short.map((m) => m?.riskAdjusted ?? null));
+
+  const ranked: Stock[] = stocks.map((stock, i) => ({
+    ...stock,
+    rank: 0,
+    momentum12_1: attach(stock, long[i], longPct[i]),
+    momentum6_1: attach(stock, short[i], shortPct[i]),
+    blend: momentumBlend(longPct[i], shortPct[i]),
+  }));
+
+  // Momentum Blend is the primary ranking value. Anything without one sorts
+  // to the bottom, and ties fall back to the symbol so the order is stable.
+  ranked.sort((a, b) => {
+    const left = a.blend ?? -Infinity;
+    const right = b.blend ?? -Infinity;
+    if (left !== right) return right - left;
+    return a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0;
+  });
+  ranked.forEach((stock, i) => {
+    stock.rank = i + 1;
+  });
+  return ranked;
+}
+
+export const RANKS: Stock[] = rankUniverse(dataset.stocks);
 
 /** The most recent close in the dataset, e.g. "2026-08-12". */
 export const AS_OF: string = dataset.asOf;
@@ -68,7 +98,7 @@ export function formatAsOfLong(iso: string): string {
   });
 }
 
-export const RANKS_SUBTITLE = `Adjusted close · ${formatAsOf(AS_OF)}`;
+export const RANKS_SUBTITLE = `Momentum blend · ${formatAsOf(AS_OF)}`;
 
 /** Trading days shown for each graph window. */
 const WINDOW_DAYS: Record<WindowId, number> = {
