@@ -364,10 +364,11 @@ score and coloured by its correlation group, stacked where marks would collide.
 The shape of the ranking and how the groups sit inside it read before any row
 does. Clicking a mark scrolls to its row.
 
-The second is that **colour means one thing**. Nothing else on the page is
-coloured — a score states its sign with a `+` or `−` rather than a green or a
-red — so a rail down the side of a row always answers the same question: which
-group of funds does this one move with?
+The second is that **colour answers one question at a time**, and the Colour
+switch chooses which. Nothing else on the page is coloured — a score states its
+sign with a `+` or `−` rather than a green or a red — so a rail down the side of
+a row is never competing with anything: it is either the correlation group the
+fund sits in, or the score itself.
 
 Layout follows from that. The board is a wide table with a persistent basket
 rail rather than a tab, the window and skip controls sit in one bar above it,
@@ -425,6 +426,55 @@ Group **names** are deliberately absent. The centre of each group — the fund
 with the smallest total distance to the rest — gets a ring on its ticker, and
 the band states size and mean correlation. Naming a group after its medoid
 implies the medoid defines it, which is not what a medoid is.
+
+## Heat
+
+The other colouring drops the groups and paints the score: deep red, through a
+midpoint that recedes into the page, to acid green. Higher is greener.
+
+The **midpoint is pinned at a score of zero**, not at the middle of the range,
+because zero is a real place on this axis — the return was flat. Each arm is
+then scaled by its own reach, so both ends of the ramp are in use however
+lopsided the day happens to be (right now −1.37 to +2.85, so zero sits 32% of
+the way across). The domain is the whole universe, never the filtered set: a
+search that hides forty funds must not repaint the ones it leaves, or the same
+colour would mean two different scores a second apart.
+
+The scale **follows the Window and Skip switches** rather than being pinned to
+one window, so the colour can never disagree with the number printed beside it.
+Set Window to 12 mo and Skip to 100% and it is exactly 12-1 return over 12-1
+volatility.
+
+The ramp under the strip is the legend, and it is drawn in the strip's own
+coordinates — same domain, same 0.6% inset — so a colour on the bar sits
+directly under the marks that wear it, with a tick where zero falls. Under Heat
+the strip is doubly encoded: position and hue carry the same number, which is
+what makes the bar readable as a key at all.
+
+```
+--heat-lo   #b02616  /  #e2563a      6.5 : 1 light,  4.9 : 1 dark
+--heat-mid  #e9e5d8  /  #33322c      recedes into the surface, by design
+--heat-hi   #5aa300  /  #9ede1f      3.0 : 1 light, 11.3 : 1 dark
+```
+
+Mixing happens in CSS — `color-mix(in oklab, var(--heat-hi) 62%, var(--heat-mid))`
+— so one ramp definition serves both themes, and a viewer switching theme
+mid-session gets the right end colours with no re-render. It also means the
+interpolation is perceptual rather than a straight line through sRGB.
+
+**Red against green is the hardest pair a colour-blind reader is asked to
+separate**, so it is never the only channel. Every row prints its score in ink;
+on the strip a mark's x position carries the same number its fill does; and the
+two ends differ in lightness as well as hue. The one place the recessive
+midpoint would have cost something is the strip, where a fund scoring near zero
+would simply vanish — so strip marks take a hairline under Heat and stay on the
+page whatever their fill.
+
+Group furniture stands down when the colour stops being the group: the ring on a
+group's centre disappears, and the band over a group loses its swatch but keeps
+its size, mean correlation and centre in text. Arranging by group and colouring
+by heat is a useful pair — it shows which groups are carrying the ranking and
+which are dragging.
 
 ## What the board adds to the basket
 

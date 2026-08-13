@@ -4,9 +4,10 @@
   /* Eighty-nine funds fit on one page, which is the whole reason this is a
      board rather than a scrolling list. Two consequences run through the
      design: the strip at the top can show every name at once, and hue is spent
-     on exactly one thing — which correlation group a fund belongs to. Nothing
-     else on the page is coloured, so a rail down the side of a row always means
-     the same thing.
+     on exactly one question at a time. The Colour switch chooses which — the
+     correlation group a fund sits in, or the score itself on a red-to-acid-green
+     ramp. Nothing else on the page is coloured, not even the sign of a number,
+     so a rail down the side of a row always means whatever the switch says.
 
      Neutrals carry a warm bias so the greys read as chosen. Both themes are
      defined token-level across all three viewer states: unstamped light,
@@ -27,6 +28,17 @@
     --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
     --other: #8a8a84;
 
+    /* The heat ramp. A diverging scale pinned at a score of zero, because zero
+       is a real place on this axis: the return was flat. Both ends clear 3:1
+       against their own surface and the midpoint recedes into it — "no signal"
+       should look like nothing. Red against green is the hardest pair a
+       colour-blind reader is asked to separate, so it is never the only
+       channel: the score is printed in ink on every row, and on the strip the
+       mark's own x position carries the same number the colour does. */
+    --heat-lo: #b02616;
+    --heat-mid: #e9e5d8;
+    --heat-hi: #5aa300;
+
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
@@ -45,6 +57,10 @@
       --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
       --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
       --other: #7e7e77;
+
+      --heat-lo: #e2563a;
+      --heat-mid: #33322c;
+      --heat-hi: #9ede1f;
     }
   }
 
@@ -61,6 +77,10 @@
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
     --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
     --other: #7e7e77;
+
+    --heat-lo: #e2563a;
+    --heat-mid: #33322c;
+    --heat-hi: #9ede1f;
   }
 
   * { box-sizing: border-box; }
@@ -177,6 +197,37 @@
   }
 
   .swarm button:hover, .swarm button:focus-visible { z-index: 3; }
+
+  /* Under Heat a fund scoring near zero is painted almost the colour of the
+     surface, which is right for a row rail — nothing to say — but on the strip
+     it would delete the mark, and the strip's job is to hold all 89. A hairline
+     keeps every mark on the page whatever its fill. */
+  .swarm[data-heat="1"] button { outline: 1px solid var(--rule-2); outline-offset: -1px; }
+
+  /* Under the heat colouring the strip doubles as the legend: the marks are
+     already laid out on the score axis, so a ramp drawn beneath them in the
+     same coordinates says what every colour on the page means. The zero stop
+     sits where zero sits on the axis. */
+  .legend { padding: 6px 0 0; }
+  .legend .ramp { height: 6px; border-radius: 3px; margin: 0 .6%; }
+  .legend .ticks { position: relative; height: 13px; margin: 0 .6%; }
+  .legend .ticks span {
+    position: absolute;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .legend .ticks span::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -6px;
+    height: 4px;
+    border-left: 1px solid var(--rule-2);
+  }
 
   .axis {
     display: flex;
@@ -520,9 +571,9 @@
   <header class="mast">
     <div>
       <h1>Thematic ETF Board</h1>
-      <p class="lede">Every fund in the list, ranked on volatility-adjusted momentum and coloured by
-        the correlation group it belongs to. The groups are read off the returns, not off the theme
-        names &mdash; two funds share a colour because they move together.</p>
+      <p class="lede">Every fund in the list, ranked on volatility-adjusted momentum. Colour answers
+        one of two questions: which correlation group a fund belongs to &mdash; read off the returns,
+        not off the theme names &mdash; or how the score itself stands, red through to acid green.</p>
     </div>
     <dl class="facts">
       <div><dt>Funds</dt><dd id="f-n"></dd></div>
@@ -533,18 +584,26 @@
 
   <div class="strip">
     <div class="swarm" id="swarm"></div>
+    <div class="legend" id="legend" hidden>
+      <div class="ramp" id="ramp"></div>
+      <div class="ticks"><span id="tick-zero">0</span></div>
+    </div>
     <div class="axis"><span id="ax-lo"></span><span id="ax-mid">Score</span><span id="ax-hi"></span></div>
   </div>
 
   <div class="bar">
     <input id="q" type="search" placeholder="Search ticker or theme" aria-label="Search ticker or theme">
     <select id="theme" aria-label="Theme"></select>
-    <div class="seg"><span>Group by</span><div role="group" aria-label="Group by">
+    <div class="seg"><span>Arrange</span><div role="group" aria-label="Arrange">
       <button type="button" data-arrange="rank">Rank</button>
-      <button type="button" data-arrange="group">Colour</button>
+      <button type="button" data-arrange="group">Group</button>
       <button type="button" data-arrange="theme">Theme</button>
     </div></div>
     <div class="seg" id="kseg"><span>Into</span><div role="group" aria-label="Number of groups"></div></div>
+    <div class="seg"><span>Colour</span><div role="group" aria-label="Colour">
+      <button type="button" data-colour="group" title="One hue per correlation group">Group</button>
+      <button type="button" data-colour="heat" title="Red to acid green on the score itself — higher is greener">Heat</button>
+    </div></div>
     <div class="seg"><span>Window</span><div role="group" aria-label="Window start">
       <button type="button" data-metric="0">Blend</button>
       <button type="button" data-metric="1">12 mo</button>
@@ -602,6 +661,17 @@
       within-group distance stops falling. The centre of each group is ringed in its row. Colour is
       anchored on the 8&#8209;group run, so changing the count splits a group rather than repainting the
       page, and past eight groups the smallest wear a neutral grey &mdash; a ninth hue is never invented.</p>
+    <p><b>Heat.</b> The second colouring drops the groups and paints the score itself, deep red
+      through a near-invisible middle to acid green &mdash; higher is greener. The middle is pinned at
+      a score of zero rather than at the middle of the range, because zero is a real place on this
+      axis: the return was flat. Each arm is then scaled by its own reach, so both ends of the ramp
+      are in use however lopsided the day's ranking is, and the ramp under the strip is the legend —
+      drawn in the strip's own coordinates, so a colour lines up with the marks that wear it. The
+      scale follows the Window and Skip switches, so it can never disagree with the number beside it:
+      set Window to 12&nbsp;mo and Skip to 100% and it is exactly 12&ndash;1 return over 12&ndash;1
+      volatility. Red against green is the hardest pair a colour-blind reader is asked to separate,
+      so it is never the only channel &mdash; every row prints its score, and on the strip a mark's
+      position carries the same number its colour does.</p>
     <p><b>The dot</b> beside a ticker means it correlates 0.60 or higher with something already in the
       basket &mdash; the question &ldquo;do I own this already?&rdquo;, asked pairwise rather than
       against the basket average. <b>The chevron</b> opens a fund's top holdings, each carrying its own
@@ -625,7 +695,7 @@
 
   /* ---------- state ---------- */
   const state = {
-    q: "", theme: "", arrange: "rank", k: DATA.referenceK,
+    q: "", theme: "", arrange: "rank", k: DATA.referenceK, colour: "group",
     metric: 0, skip: 2, sort: "score", desc: true,
     weight: "iv", display: "pct", open: null,
   };
@@ -637,6 +707,7 @@
     if ([0, 1, 2].includes(saved.metric)) state.metric = saved.metric;
     if ([0, 1, 2].includes(saved.skip)) state.skip = saved.skip;
     if (["rank", "group", "theme"].includes(saved.arrange)) state.arrange = saved.arrange;
+    if (["group", "heat"].includes(saved.colour)) state.colour = saved.colour;
     if (["eq", "iv"].includes(saved.weight)) state.weight = saved.weight;
     if (["pct", "cash"].includes(saved.display)) state.display = saved.display;
   } catch {}
@@ -644,7 +715,7 @@
   const persist = () => {
     try {
       localStorage.setItem(KEY, JSON.stringify({
-        k: state.k, metric: state.metric, skip: state.skip,
+        k: state.k, metric: state.metric, skip: state.skip, colour: state.colour,
         arrange: state.arrange, weight: state.weight, display: state.display,
       }));
     } catch {}
@@ -741,7 +812,42 @@
   const kIndex = new Map(DATA.ks.map((k, i) => [k, i]));
   const run = () => DATA.groups[state.k];
   const groupOf = (s) => run().groups[s.g[kIndex.get(state.k)]];
-  const colourFor = (s) => colourOf(groupOf(s).slot);
+
+  /* ---------- the heat scale ----------
+     The domain is the whole universe at the current window, never the filtered
+     set: a search that hides forty funds must not repaint the ones left, or the
+     same colour would mean two different scores a second apart.
+
+     Mixing happens in OKLab, in CSS, against the theme's own tokens — so one
+     ramp definition serves light and dark, and a viewer switching theme
+     mid-session gets the right end colours without a re-render. */
+  let heatCache = null;
+  function heatDomain() {
+    const key = state.metric + ":" + state.skip;
+    if (heatCache && heatCache.key === key) return heatCache;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const s of ITEMS) {
+      const v = sc(s);
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    heatCache = { key, lo, hi };
+    return heatCache;
+  }
+
+  function heatColour(v) {
+    const { lo, hi } = heatDomain();
+    // Each arm is scaled by its own reach, so both ends of the ramp are used
+    // however lopsided the ranking happens to be that day.
+    const end = v >= 0 ? "--heat-hi" : "--heat-lo";
+    const far = v >= 0 ? hi : lo;
+    const t = far && Math.sign(far) === Math.sign(v) ? Math.min(1, v / far) : 0;
+    return `color-mix(in oklab, var(${end}) ${(t * 100).toFixed(1)}%, var(--heat-mid))`;
+  }
+
+  const heating = () => state.colour === "heat";
+  const colourFor = (s) => (heating() ? heatColour(sc(s)) : colourOf(groupOf(s).slot));
 
   const ITEMS = FUNDS.map((f, i) => ({ ...f, i, theme: DATA.themes[f.t] }));
   const held = () => ITEMS.filter((s) => picked.has(s.y));
@@ -818,7 +924,9 @@
     nm.textContent = s.n;
     sub.append(nm);
 
-    if (groupOf(s).medoid === s.i) {
+    // The ring marks the centre of a colour group, so it goes when the colour
+    // stops being the group. Under Heat the band still names the centre.
+    if (!heating() && groupOf(s).medoid === s.i) {
       const ring = document.createElement("span");
       ring.className = "med";
       ring.title = "the centre of its colour group";
@@ -963,8 +1071,9 @@
     const swarm = $("swarm");
     swarm.textContent = "";
     const rows = ITEMS.map((s) => ({ s, v: sc(s) })).sort((a, b) => a.v - b.v);
-    const lo = rows[0].v;
-    const hi = rows[rows.length - 1].v;
+    // One domain for the axis and the ramp, so a mark's position and its colour
+    // can never disagree about the same number.
+    const { lo, hi } = heatDomain();
     const span = hi - lo || 1;
 
     // Stack marks that would otherwise land on top of each other. The mark is
@@ -1008,6 +1117,19 @@
       swarm.append(b);
     }
 
+    // The ramp is the legend, drawn in the strip's own coordinates: the zero
+    // stop lands under the mark for a fund that went nowhere.
+    const zero = Math.max(0, Math.min(100, ((0 - lo) / span) * 100));
+    $("legend").hidden = !heating();
+    swarm.dataset.heat = heating() ? "1" : "0";
+    if (heating()) {
+      $("ramp").style.background =
+        `linear-gradient(90deg, var(--heat-lo) 0%, var(--heat-mid) ${zero.toFixed(1)}%, var(--heat-hi) 100%)`;
+      const tick = $("tick-zero");
+      tick.style.left = zero.toFixed(1) + "%";
+      tick.hidden = zero < 3 || zero > 97;
+    }
+
     $("ax-lo").textContent = fmtScore(lo);
     $("ax-hi").textContent = fmtScore(hi);
     $("ax-mid").textContent = METRICS[state.metric] + (state.skip === 2 ? "" : " · skip " + ["0%", "50%", "100%"][state.skip]);
@@ -1017,10 +1139,12 @@
   function band(colour, title, note) {
     const d = document.createElement("div");
     d.className = "band";
-    d.style.setProperty("--c", colour);
-    const sw = document.createElement("span");
-    sw.className = "sw";
-    d.append(sw);
+    if (colour) {
+      d.style.setProperty("--c", colour);
+      const sw = document.createElement("span");
+      sw.className = "sw";
+      d.append(sw);
+    }
     const b = document.createElement("b");
     b.textContent = title;
     d.append(b);
@@ -1062,7 +1186,8 @@
       gs.forEach((g, gi) => {
         const mine = rows.filter((s) => s.g[kIndex.get(state.k)] === gi);
         if (!mine.length) return;
-        frag.append(band(colourOf(g.slot), `${mine.length}${mine.length === g.n ? "" : " of " + g.n} funds`,
+        frag.append(band(heating() ? null : colourOf(g.slot),
+          `${mine.length}${mine.length === g.n ? "" : " of " + g.n} funds`,
           `mean correlation ${g.rho.toFixed(2)} · centre ${FUNDS[g.medoid].y}`));
         emit(mine, 0);
       });
@@ -1077,7 +1202,7 @@
       for (const name of DATA.themes) {
         const mine = byTheme.get(name);
         if (!mine) continue;
-        frag.append(band("transparent", name, `${mine.length} fund${mine.length === 1 ? "" : "s"}`));
+        frag.append(band(null, name, `${mine.length} fund${mine.length === 1 ? "" : "s"}`));
         emit(mine, 0);
       }
     }
@@ -1194,6 +1319,9 @@
   for (const b of document.querySelectorAll("[data-arrange]")) {
     b.addEventListener("click", () => { state.arrange = b.dataset.arrange; persist(); render(); });
   }
+  for (const b of document.querySelectorAll("[data-colour]")) {
+    b.addEventListener("click", () => { state.colour = b.dataset.colour; persist(); render(); });
+  }
   for (const b of document.querySelectorAll("[data-metric]")) {
     b.addEventListener("click", () => { state.metric = +b.dataset.metric; persist(); render(); });
   }
@@ -1228,6 +1356,7 @@
       for (const b of document.querySelectorAll(sel)) b.setAttribute("aria-pressed", String(on(b)));
     };
     press("[data-arrange]", (b) => b.dataset.arrange === state.arrange);
+    press("[data-colour]", (b) => b.dataset.colour === state.colour);
     press("[data-k]", (b) => +b.dataset.k === state.k);
     press("[data-metric]", (b) => +b.dataset.metric === state.metric);
     press("[data-skip]", (b) => +b.dataset.skip === state.skip);
