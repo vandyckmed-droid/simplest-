@@ -39,39 +39,36 @@
   opacity: 0.5;
 }
 
-.scroll {
+/*
+ * The pager. The viewport clips; the track carries the previous, current and
+ * next pages side by side and is dragged with the finger. `pan-y` hands
+ * vertical scrolling back to the browser, so up and down never turns a page.
+ */
+.viewport {
   flex: 1 1 auto;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.track {
+  display: flex;
+  width: 300%;
+  height: 100%;
+  will-change: transform;
+}
+
+/* Only while settling — during the drag the track must track the finger. */
+.settling {
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.pane {
+  width: 33.3333%;
+  height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding-bottom: calc(env(safe-area-inset-bottom) + var(--space-8));
-}
-
-/* Each stock slides in from the side it was swiped from. */
-.page {
-  animation: slide-next 0.24s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.page[data-direction='prev'] {
-  animation-name: slide-prev;
-}
-
-.page[data-direction='none'] {
-  animation: none;
-}
-
-@keyframes slide-next {
-  from {
-    opacity: 0;
-    transform: translateX(28px);
-  }
-}
-
-@keyframes slide-prev {
-  from {
-    opacity: 0;
-    transform: translateX(-28px);
-  }
 }
 
 .identity {

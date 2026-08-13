@@ -22,3 +22,24 @@
   stroke-dasharray: 2 4;
   vector-effect: non-scaling-stroke;
 }
+
+/*
+ * The line draws itself from left to right by uncovering it. A dash-offset
+ * draw would be the obvious approach, but `non-scaling-stroke` measures dashes
+ * after the viewBox has been stretched, so the pattern repeats instead of
+ * running once. Clipping is immune to that.
+ *
+ * It ends slightly outside the box so the last point's stroke is never shaved.
+ */
+.reveal {
+  animation: draw 0.62s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes draw {
+  from {
+    clip-path: inset(-2% 100% -2% -2%);
+  }
+  to {
+    clip-path: inset(-2% -2% -2% -2%);
+  }
+}

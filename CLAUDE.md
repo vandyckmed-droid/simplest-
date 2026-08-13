@@ -72,6 +72,7 @@ Test
 - ✓ **Phase 5** — Real market data
 - ✓ **Phase 6** — 12–1 momentum
 - ✓ **Phase 7** — 6–1 momentum + Momentum Blend
+- ✓ **Phase 8** — Ticker-detail interaction
 
 ## Commands
 

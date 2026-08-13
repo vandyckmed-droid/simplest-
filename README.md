@@ -134,9 +134,25 @@ window defaults to 1Y and is kept while swiping between stocks, so spans
 compare like for like.
 
 Swipe left or right to move through the ranked list, or use the arrow keys;
-Escape closes. The gesture locks to whichever axis it moves along first, so
-scrolling the page never changes stock. It stops at both ends rather than
-wrapping.
+Escape closes.
+
+The pager holds the previous, current and next stocks side by side in a track
+that is dragged with the finger, so the neighbour is already on screen before
+you let go — the movement is the gesture, not an animation played afterwards.
+A page turns if the drag passes a quarter of the width, or on a flick that is
+both fast and past an eighth of the width; anything shorter springs back.
+Dragging past either end stretches instead of moving.
+
+The gesture locks to whichever axis it moves along first, and the viewport
+carries `touch-action: pan-y`, so vertical scrolling stays with the browser
+and never turns a page.
+
+The price line draws itself from left to right when a stock opens and again
+whenever the window changes, over 620ms. It is a clip that uncovers the line
+rather than a dash-offset draw: `non-scaling-stroke` measures dashes after the
+viewBox has been stretched, so a dash pattern repeats instead of running once.
+Swiping does not redraw — the neighbouring pages are already mounted, so
+moving between them stays quiet.
 
 Price history in `src/data/series.ts` is fake, generated deterministically
 from each stock's own volatility and 12–1 return and rescaled to end at the
@@ -186,7 +202,7 @@ src/
   types.ts             Stock, Holding, TabId
   selectionStore.ts    chosen symbols: one store, every screen
   weights.ts           equal weighting, summing to exactly 100%
-  useSwipe.ts          axis-locked left/right gestures
+  useCarousel.ts       the finger-tracking pager behind ticker detail
   momentum.ts          the 12–1 signal, as pure functions
   data/market.ts       the app's only view of market data
   data/market.json     generated dataset (real adjusted closes)
@@ -248,5 +264,9 @@ Checked in Chromium at iPhone 14 Pro and 320px widths, in light and dark:
 - Every momentum figure on screen matches a recomputation from the raw closes
 - The skipped month cannot change either signal, checked by tampering with it
 - Ranks is ordered by the blend, and each row's rank matches its position
+- The track follows the finger, with no easing until the gesture ends
+- A vertical or mostly-vertical drag never changes stock, nor does a short one
+- A flick turns the page; the same distance taken slowly does not
+- The line draws on open and on a window change, but not while swiping
 - The theme toggle round-trips and survives a reload
 - No console errors, and `npm run build` passes strict typecheck

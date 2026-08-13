@@ -5,6 +5,8 @@ interface PriceGraphProps {
   points: number[];
   /** Describes the graph for anyone who can't see it. */
   label: string;
+  /** Change this to redraw the line. */
+  drawKey?: string;
 }
 
 const VIEW_W = 1000;
@@ -16,7 +18,7 @@ const PAD_Y = 10;
  * A single price line. No axes, no grid, no fill — the shape carries the
  * information, and anything else would compete with it.
  */
-export function PriceGraph({ points, label }: PriceGraphProps) {
+export function PriceGraph({ points, label, drawKey }: PriceGraphProps) {
   const min = Math.min(...points);
   const max = Math.max(...points);
   const span = max - min || 1;
@@ -38,8 +40,11 @@ export function PriceGraph({ points, label }: PriceGraphProps) {
       aria-label={label}
       style={{ '--graph-stroke': rising ? 'var(--accent)' : 'var(--negative)' } as CSSProperties}
     >
-      <line className={styles.baseline} x1="0" x2={VIEW_W} y1={baselineY} y2={baselineY} />
-      <path className={styles.line} d={path} />
+      {/* Remounting on drawKey replays the draw. */}
+      <g key={drawKey} className={styles.reveal}>
+        <line className={styles.baseline} x1="0" x2={VIEW_W} y1={baselineY} y2={baselineY} />
+        <path className={styles.line} d={path} />
+      </g>
     </svg>
   );
 }
