@@ -52,7 +52,6 @@
 
 .track {
   display: flex;
-  width: 300%;
   height: 100%;
   will-change: transform;
 }
@@ -63,7 +62,6 @@
 }
 
 .pane {
-  width: 33.3333%;
   height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;

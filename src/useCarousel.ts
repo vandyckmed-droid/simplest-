@@ -3,9 +3,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 /**
  * A horizontal pager that follows the finger.
  *
- * The track holds the previous, current and next pages side by side and is
- * translated as you drag, so the neighbour is already on screen before you
- * let go — the movement is the gesture, not an animation played afterwards.
+ * Every page is mounted once, side by side in a single track, and only the
+ * track's transform changes. That matters for more than tidiness: moving a
+ * node in the DOM restarts its CSS animations, so a pager that recycled a
+ * window of pages would replay the chart's draw on every swipe and flash as
+ * the nodes were re-inserted. Nothing here moves, so nothing restarts.
+ *
+ * Committing a page is one continuous transition — the target offset changes
+ * from "this page plus the drag" to "the next page", and CSS carries it the
+ * rest of the way. There is no snap back to the middle.
  *
  * Vertical scrolling is untouched: the gesture locks to whichever axis it
  * moves along first, and `touch-action: pan-y` on the viewport leaves the
@@ -30,7 +36,7 @@ const SETTLE_MS = 280;
 interface Carousel {
   /** Attach to the element that should receive the gesture. */
   rootRef: React.RefObject<HTMLElement>;
-  /** Live offset of the track, in pixels. */
+  /** Live drag offset of the track, in pixels. */
   offset: number;
   /** True while the track is settling, so CSS can ease it. */
   settling: boolean;
@@ -54,23 +60,19 @@ export function useCarousel(
   } | null>(null);
   const settleTimer = useRef<number | undefined>(undefined);
 
-  // The index the gesture is measured against; kept in a ref so the native
-  // listeners never close over a stale value.
+  // Kept in a ref so the native listeners never close over a stale value.
   const state = useRef({ index, count });
   state.current = { index, count };
 
-  const settleTo = useCallback(
-    (target: number, nextIndex: number) => {
+  const settle = useCallback(
+    (nextIndex: number) => {
       setSettling(true);
-      setOffset(target);
+      // Both in one update: the transform target moves straight from where
+      // the finger left it to where the new page sits, and eases across.
+      setOffset(0);
+      if (nextIndex !== state.current.index) onIndexChange(nextIndex);
       window.clearTimeout(settleTimer.current);
-      settleTimer.current = window.setTimeout(() => {
-        // Snap back to centre without a transition; the page has changed
-        // underneath, so there is nothing left to animate.
-        setSettling(false);
-        setOffset(0);
-        if (nextIndex !== state.current.index) onIndexChange(nextIndex);
-      }, SETTLE_MS);
+      settleTimer.current = window.setTimeout(() => setSettling(false), SETTLE_MS);
     },
     [onIndexChange],
   );
@@ -136,12 +138,7 @@ export function useCarousel(
       const wantsNext = dx < 0 && i < n - 1;
       const wantsPrev = dx > 0 && i > 0;
 
-      if ((far || fast) && (wantsNext || wantsPrev)) {
-        const step = wantsNext ? 1 : -1;
-        settleTo(-step * g.width, i + step);
-      } else {
-        settleTo(0, i);
-      }
+      settle((far || fast) && (wantsNext || wantsPrev) ? i + (wantsNext ? 1 : -1) : i);
     };
 
     root.addEventListener('touchstart', onStart, { passive: true });
@@ -154,7 +151,7 @@ export function useCarousel(
       root.removeEventListener('touchend', onEnd);
       root.removeEventListener('touchcancel', onEnd);
     };
-  }, [settleTo]);
+  }, [settle]);
 
   return { rootRef, offset, settling };
 }

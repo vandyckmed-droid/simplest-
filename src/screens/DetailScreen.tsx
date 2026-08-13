@@ -87,13 +87,10 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
   const stock = RANKS[index];
   if (!stock) return null;
 
-  // Previous, current and next are all mounted, so the neighbour is already
-  // on screen as the drag begins rather than appearing once it ends.
-  const panes: (Stock | null)[] = [
-    RANKS[index - 1] ?? null,
-    stock,
-    RANKS[index + 1] ?? null,
-  ];
+  // Every stock is mounted once, in order. Nothing is ever moved in the DOM:
+  // re-inserting a node restarts its CSS animations, which would replay the
+  // chart's draw on each swipe.
+  const paneWidth = 100 / RANKS.length;
 
   return (
     <section
@@ -132,22 +129,24 @@ export function DetailScreen({ symbol, onClose, onNavigate }: DetailScreenProps)
       <div className={styles.viewport}>
         <div
           className={settling ? `${styles.track} ${styles.settling}` : styles.track}
-          style={{ transform: `translate3d(calc(-33.3333% + ${offset}px), 0, 0)` }}
+          style={{
+            width: `${RANKS.length * 100}%`,
+            transform: `translate3d(calc(${-paneWidth * index}% + ${offset}px), 0, 0)`,
+          }}
         >
-          {panes.map((pane, i) => (
+          {RANKS.map((pane) => (
             <div
               className={styles.pane}
-              key={pane ? pane.symbol : `empty-${i}`}
+              key={pane.symbol}
+              style={{ width: `${paneWidth}%` }}
               aria-hidden={pane !== stock}
             >
-              {pane && (
-                <TickerPage
-                  stock={pane}
-                  window={window_}
-                  onSelectWindow={setWindow}
-                  active={pane === stock}
-                />
-              )}
+              <TickerPage
+                stock={pane}
+                window={window_}
+                onSelectWindow={setWindow}
+                active={pane === stock}
+              />
             </div>
           ))}
         </div>

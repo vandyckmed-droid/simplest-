@@ -136,12 +136,18 @@ compare like for like.
 Swipe left or right to move through the ranked list, or use the arrow keys;
 Escape closes.
 
-The pager holds the previous, current and next stocks side by side in a track
-that is dragged with the finger, so the neighbour is already on screen before
-you let go — the movement is the gesture, not an animation played afterwards.
-A page turns if the drag passes a quarter of the width, or on a flick that is
-both fast and past an eighth of the width; anything shorter springs back.
-Dragging past either end stretches instead of moving.
+Every stock is mounted once, side by side in a single track, and only the
+track's transform moves. That matters for more than tidiness: moving a node in
+the DOM restarts its CSS animations, so a pager that recycled a window of
+pages replayed the chart's draw on every swipe and flashed as the nodes were
+re-inserted. Nothing moves, so nothing restarts.
+
+Committing a page is one continuous transition — the target changes from "this
+page plus the drag" to "the next page", and CSS carries it the rest of the
+way. There is no snap back to the middle. A page turns if the drag passes a
+quarter of the width, or on a flick that is both fast and past an eighth of
+it; anything shorter springs back. Dragging past either end stretches instead
+of moving.
 
 The gesture locks to whichever axis it moves along first, and the viewport
 carries `touch-action: pan-y`, so vertical scrolling stays with the browser
@@ -151,8 +157,8 @@ The price line draws itself from left to right when a stock opens and again
 whenever the window changes, over 620ms. It is a clip that uncovers the line
 rather than a dash-offset draw: `non-scaling-stroke` measures dashes after the
 viewBox has been stretched, so a dash pattern repeats instead of running once.
-Swiping does not redraw — the neighbouring pages are already mounted, so
-moving between them stays quiet.
+Swiping does not redraw: the pages are never rebuilt, so their animations
+never restart.
 
 Price history in `src/data/series.ts` is fake, generated deterministically
 from each stock's own volatility and 12–1 return and rescaled to end at the
@@ -268,5 +274,7 @@ Checked in Chromium at iPhone 14 Pro and 320px widths, in light and dark:
 - A vertical or mostly-vertical drag never changes stock, nor does a short one
 - A flick turns the page; the same distance taken slowly does not
 - The line draws on open and on a window change, but not while swiping
+- Swiping does not re-create any page, checked with a marker on each node
+- Selecting from ticker detail does not rebuild the pager either
 - The theme toggle round-trips and survives a reload
 - No console errors, and `npm run build` passes strict typecheck
