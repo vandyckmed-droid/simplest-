@@ -1,14 +1,9 @@
 import { List, Screen, SectionLabel } from '../components/Screen';
 import { Row } from '../components/Row';
-import { HOLDINGS, PORTFOLIO_SUMMARY } from '../data/fixtures';
-import {
-  directionOf,
-  formatMoney,
-  formatSignedMoney,
-  formatSignedPercent,
-  formatWeight,
-} from '../format';
-import { useSelectedSymbols } from '../selectionStore';
+import { SelectControl } from '../components/SelectControl';
+import { formatWeight } from '../format';
+import { toggleSelection, useSelectedSymbols } from '../selectionStore';
+import { portfolioFor, totalWeight } from '../weights';
 import type { Scheme } from '../useTheme';
 import styles from './PortfolioScreen.module.css';
 
@@ -18,44 +13,55 @@ interface PortfolioScreenProps {
 }
 
 export function PortfolioScreen({ scheme, onToggleScheme }: PortfolioScreenProps) {
-  const { value, dayChange, dayChangeValue, holdingsLabel, footnote } =
-    PORTFOLIO_SUMMARY;
-  // Reads the same selection store as Ranks and ticker detail. Turning the
-  // selection into holdings and weights is a later phase.
+  // The same store Ranks and ticker detail write to, so adding or removing a
+  // stock anywhere re-weights this screen on the spot.
   const selected = useSelectedSymbols();
+  const holdings = portfolioFor(selected);
 
   return (
-    <Screen
-      title="Portfolio"
-      subtitle={
-        selected.length === 1 ? '1 stock selected' : `${selected.length} stocks selected`
-      }
-      scheme={scheme}
-      onToggleScheme={onToggleScheme}
-    >
-      <section className={styles.summary}>
-        <div className={`${styles.value} tnum`}>{formatMoney(value)}</div>
-        <p className={styles.change} data-direction={directionOf(dayChange)}>
-          <span className={`${styles.delta} tnum`}>
-            {formatSignedMoney(dayChangeValue)} ({formatSignedPercent(dayChange)})
-          </span>{' '}
-          <span className={styles.period}>Today</span>
-        </p>
-      </section>
+    <Screen title="Portfolio" scheme={scheme} onToggleScheme={onToggleScheme}>
+      {holdings.length === 0 ? (
+        <div className={styles.empty}>
+          <p className={styles.emptyTitle}>No stocks selected</p>
+          <p className={styles.emptyBody}>
+            Choose stocks in Ranks and they appear here, weighted automatically.
+          </p>
+        </div>
+      ) : (
+        <>
+          <section className={styles.summary}>
+            <div className={`${styles.value} tnum`}>
+              {formatWeight(totalWeight(holdings))}
+            </div>
+            <p className={styles.caption}>
+              {holdings.length === 1 ? '1 holding' : `${holdings.length} holdings`} ·
+              equal weight
+            </p>
+          </section>
 
-      <SectionLabel>{holdingsLabel}</SectionLabel>
-      <List>
-        {HOLDINGS.map((holding) => (
-          <Row
-            key={holding.symbol}
-            primary={holding.symbol}
-            secondary={holding.name}
-            value={formatWeight(holding.weight)}
-            meta={formatMoney(holding.value)}
-          />
-        ))}
-      </List>
-      <p className={styles.footnote}>{footnote}</p>
+          <SectionLabel>Holdings</SectionLabel>
+          <List>
+            {holdings.map((holding) => (
+              <Row
+                key={holding.symbol}
+                primary={holding.symbol}
+                secondary={holding.name}
+                value={formatWeight(holding.weight)}
+                trailing={
+                  <SelectControl
+                    selected
+                    label={holding.name}
+                    onToggle={() => toggleSelection(holding.symbol)}
+                  />
+                }
+              />
+            ))}
+          </List>
+          <p className={styles.footnote}>
+            Weights are set automatically and always total 100%.
+          </p>
+        </>
+      )}
     </Screen>
   );
 }

@@ -6,23 +6,22 @@ The only actions the product ever offers are **look, sort, filter, inspect,
 select, deselect**. Portfolio weights are never entered by hand — they are
 derived. Every phase is built against that rule.
 
-## Status — Phase 3: Ticker Detail
+## Status — Phase 4: Basic Portfolio
 
 | Built | Not built yet |
 | --- | --- |
 | iPhone-first layout with safe-area handling | APIs and live data |
-| Ranks screen: rank, logo, ticker, momentum blend, return | Any calculation |
-| Select / deselect, persisted on the device | Sorting and filtering |
-| Ticker detail: price, graph, 1M–2Y windows, three stats | Portfolio weighting |
-| Swipe left/right through the ranked list | |
-| Portfolio screen | |
+| Ranks screen: rank, logo, ticker, momentum blend, return | Sorting and filtering |
+| Select / deselect, persisted on the device | Volatility or covariance weighting |
+| Ticker detail: price, graph, 1M–2Y windows, three stats | Clustering, HRP |
+| Swipe left/right through the ranked list | Portfolio diagnostics |
+| Portfolio: your selections, equal-weighted to 100% | |
 | Bottom tab navigation | |
 | Light and dark mode | |
 | Design tokens and one shared row | |
 
-All numbers on screen come from `src/data/fixtures.ts` and are literals —
-the momentum scores, the returns, the portfolio total, the weights. Nothing
-is computed.
+Market data in `src/data/fixtures.ts` is fake and every value there is a
+literal. The only thing the app computes is the portfolio weighting.
 
 ### Selection
 
@@ -34,6 +33,24 @@ puck would read louder than the ranking it sits beside.
 `selectionStore.ts` is a module-level store read through `useSyncExternalStore`,
 not per-component state, so Ranks, ticker detail, and Portfolio can never
 disagree about what is selected.
+
+### Portfolio
+
+Portfolio is not a screen you fill in — it is a view of the selection. It
+shows only selected stocks, in ranked order, with the weight the system gave
+each one. The header carries the two facts that matter: the total weight and
+the number of holdings.
+
+Phase 4 weights every holding equally. Weights are distributed in tenths of
+a percent by largest remainder, so what is on screen adds to exactly 100.0%
+instead of 99.9% — three holdings read 33.4 / 33.3 / 33.3 rather than three
+thirds that quietly lose a tenth. `weights.ts` owns this and nothing else
+writes a weight.
+
+There is no way to edit a weight, by design. The + / ✓ control appears on
+Portfolio rows too, so a holding can be dropped from here; because every
+screen reads the one selection store, removing a stock anywhere re-weights
+the rest immediately.
 
 ### Ticker detail
 
@@ -99,6 +116,7 @@ src/
   format.ts            money / percent / weight formatting
   types.ts             Stock, Holding, TabId
   selectionStore.ts    chosen symbols: one store, every screen
+  weights.ts           equal weighting, summing to exactly 100%
   useSwipe.ts          axis-locked left/right gestures
   data/fixtures.ts     all fake data, in one place
   data/series.ts       deterministic fake price history
@@ -142,5 +160,9 @@ Checked in Chromium at iPhone 14 Pro and 320px widths, in light and dark:
 - Swiping moves through the ranked list, keeps the window, and stops at the ends
 - Selection stays in step across Ranks, detail, and Portfolio
 - Back restores the Ranks scroll position exactly
+- Portfolio shows only selected stocks, in ranked order, with no editable field
+- Every holding count from 1 to 10 displays weights totalling exactly 100.0%
+- Adding or removing in Ranks, detail, or Portfolio re-weights the rest at once
+- The empty state appears with nothing selected
 - The theme toggle round-trips and survives a reload
 - No console errors, and `npm run build` passes strict typecheck

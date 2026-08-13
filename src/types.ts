@@ -17,15 +17,12 @@ export interface Stock {
   volatility: number;
 }
 
-export interface Holding {
+/** A selected stock and the weight the system gave it. Never authored. */
+export interface WeightedHolding {
   symbol: string;
   name: string;
-  /** Portfolio weight, as a fraction (0.184 = 18.4%). */
+  /** Portfolio weight, as a fraction (0.25 = 25%). */
   weight: number;
-  /** Position value, in dollars. */
-  value: number;
-  /** Day change, as a fraction. */
-  dayChange: number;
 }
 
 export type TabId = 'ranks' | 'portfolio';

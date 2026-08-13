@@ -68,6 +68,7 @@ Test
 - ✓ **Phase 1** — App shell
 - ✓ **Phase 2** — Ranks
 - ✓ **Phase 3** — Ticker detail
+- ✓ **Phase 4** — Basic portfolio
 
 ## Commands
 

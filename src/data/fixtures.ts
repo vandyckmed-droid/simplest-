@@ -2,12 +2,11 @@
  * Static fake data for the shell, Ranks, and ticker detail.
  *
  * Nothing here is computed — not the momentum scores, not the returns, not
- * the volatilities, not the portfolio totals or weights. Real data and the
- * calculations behind it arrive in later phases; this file exists so the
- * layout can be judged with realistic content.
+ * the volatilities. Portfolio holdings are no longer written down at all:
+ * they are whatever the user has selected, weighted by `src/weights.ts`.
  */
 
-import type { Holding, Stock } from '../types';
+import type { Stock } from '../types';
 
 export const RANKS: Stock[] = [
   { rank: 1, symbol: 'NVDA', name: 'NVIDIA', price: 138.42, dayChange: 0.0284, momentum: 96.4, return121: 1.842, volatility: 0.512 },
@@ -27,22 +26,3 @@ export const RANKS_SUBTITLE = 'Momentum blend · Aug 13';
 export function findStock(symbol: string): Stock | undefined {
   return RANKS.find((stock) => stock.symbol === symbol);
 }
-
-export const HOLDINGS: Holding[] = [
-  { symbol: 'NVDA', name: 'NVIDIA', weight: 0.184, value: 4472.18, dayChange: 0.0284 },
-  { symbol: 'COST', name: 'Costco Wholesale', weight: 0.161, value: 3913.06, dayChange: 0.0042 },
-  { symbol: 'LLY', name: 'Eli Lilly', weight: 0.148, value: 3597.14, dayChange: -0.0071 },
-  { symbol: 'AAPL', name: 'Apple', weight: 0.137, value: 3329.72, dayChange: 0.0118 },
-  { symbol: 'AXP', name: 'American Express', weight: 0.126, value: 3062.41, dayChange: 0.0087 },
-  { symbol: 'GE', name: 'GE Aerospace', weight: 0.098, value: 2381.87, dayChange: 0.0209 },
-  { symbol: 'WMT', name: 'Walmart', weight: 0.081, value: 1968.55, dayChange: 0.0051 },
-  { symbol: 'JPM', name: 'JPMorgan Chase', weight: 0.065, value: 1579.93, dayChange: 0.0033 },
-];
-
-export const PORTFOLIO_SUMMARY = {
-  value: 24304.86,
-  dayChangeValue: 287.41,
-  dayChange: 0.0119,
-  holdingsLabel: 'Holdings · 8 stocks',
-  footnote: 'Weights are set automatically.',
-};

@@ -34,12 +34,6 @@ export function formatSignedPercent(fraction: number): string {
   return `${sign}${percent.format(Math.abs(fraction))}`;
 }
 
-/** Signed dollars, e.g. "+$287.41". */
-export function formatSignedMoney(value: number): string {
-  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
-  return `${sign}${currency.format(Math.abs(value))}`;
-}
-
 /** Unsigned weight, e.g. "18.4%". */
 export function formatWeight(fraction: number): string {
   return weightPercent.format(fraction);
